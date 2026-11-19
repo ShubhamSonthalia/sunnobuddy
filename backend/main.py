@@ -5,9 +5,19 @@ from app.routes import users, mindlog, chat, emotions, reports, intake, voice
 
 app = FastAPI(title="SunnoBuddy API")
 
+allowed_origins = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
+if settings.frontend_url:
+    cleaned_frontend_url = settings.frontend_url.strip().rstrip("/")
+    if cleaned_frontend_url and cleaned_frontend_url not in allowed_origins:
+        allowed_origins.append(cleaned_frontend_url)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.frontend_url],
+    allow_origins=allowed_origins,
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
