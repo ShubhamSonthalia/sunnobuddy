@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
-from app.routes import users, mindlog, chat, emotions, reports, intake, voice
+from app.routes import users, mindlog, chat, emotions, reports, intake, voice, therapists
 
 app = FastAPI(title="SunnoBuddy API")
 
@@ -29,3 +29,4 @@ app.include_router(emotions.router)
 app.include_router(reports.router)
 app.include_router(intake.router)
 app.include_router(voice.router)
+app.include_router(therapists.router)

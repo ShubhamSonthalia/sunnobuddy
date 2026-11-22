@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { ProtectedRoute, useAuth } from '@/contexts/auth-context'
-import { services, type EmotionAnalysis, type MindLogEntry } from '@/services/api'
+import { services, type EmotionAnalysis, type MindLogEntry, type ChatSession, type ComprehensiveInsights, type IntakeUserStatus } from '@/services/api'
 import { Cell, Pie, PieChart } from 'recharts'
 import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart'
 import Link from 'next/link'
@@ -14,6 +14,8 @@ import {
   ArrowLeft,
   ArrowRight,
   BookHeart,
+  Bookmark,
+  Calendar,
   CalendarDays,
   Check,
   ChevronDown,
@@ -21,29 +23,41 @@ import {
   ChevronRight,
   CircleHelp,
   Clock3,
+  Compass,
+  Download,
+  ExternalLink,
   FileText,
   Heart,
   Home,
   LockKeyhole,
+  LogOut,
   MapPin,
   Menu,
   MessageCircle,
   Mic,
   Moon,
   MoreHorizontal,
+  Navigation,
   Pause,
+  Phone,
   Play,
   Plus,
   RotateCcw,
   Send,
   Settings,
+  ShieldAlert,
   ShieldCheck,
   Sparkles,
   Sun,
   Trash2,
+  Users,
+  Volume2,
+  VolumeX,
   Waves,
   X,
+  Copy,
 } from 'lucide-react'
+import { getDailyThoughtText } from '@/lib/daily-thoughts'
 
 const dailyThoughts = [
   'Small steps matter. Take your time.',
@@ -821,12 +835,54 @@ function Login() {
 function Sidebar({ active, close }: { active: string; close: () => void }) {
   const { user, logOut } = useAuth()
   const router = useRouter()
-  const { t } = useAppLanguage()
+  const { lang, t } = useAppLanguage()
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false)
+  const [showSignOutConfirm, setShowSignOutConfirm] = useState(false)
+  const [signingOut, setSigningOut] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
+
   const displayName = user?.isAnonymous ? t('nav_status') : user?.displayName || user?.email || t('nav_account')
-  const logout = async () => {
-    await logOut()
-    router.replace('/')
+  const userEmail = user?.isAnonymous ? 'Guest User' : user?.email || displayName
+
+  const thoughtForToday = () => {
+    return getDailyThoughtText(new Date(), lang)
   }
+
+  const handleSignOut = async () => {
+    setSigningOut(true)
+    try {
+      await logOut()
+      setAccountMenuOpen(false)
+      close()
+      router.replace('/login')
+    } finally {
+      setSigningOut(false)
+    }
+  }
+
+  // Close account menu on click outside or Escape
+  useEffect(() => {
+    if (!accountMenuOpen) return
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setAccountMenuOpen(false)
+        setShowSignOutConfirm(false)
+      }
+    }
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setAccountMenuOpen(false)
+        setShowSignOutConfirm(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [accountMenuOpen])
+
   return (
     <>
       <button className="mobile-shade" aria-label="Close navigation" onClick={close} />
@@ -853,29 +909,117 @@ function Sidebar({ active, close }: { active: string; close: () => void }) {
               <small>{thoughtForToday()}</small>
             </span>
           </div>
-          <Link href="/dashboard/settings" className="side-link">
-            <Settings size={18} />
-            <span>{t('nav_settings')}</span>
-          </Link>
-          <button className="profile-row" onClick={() => void logout()} aria-label={`Sign out ${displayName}`}>
-            <div className="profile-avatar">{displayName.charAt(0).toUpperCase()}</div>
-            <span>
-              <b>{displayName}</b>
-              <small>{t('nav_signout')}</small>
-            </span>
-            <MoreHorizontal size={18} />
-          </button>
+
+          <div className="sidebar-profile-wrap" ref={menuRef}>
+            {accountMenuOpen && (
+              <div className="account-popover surface-card" role="dialog" aria-label="Account Menu">
+                <div className="account-popover-header">
+                  <div className="profile-avatar" style={{ width: '38px', height: '38px', fontSize: '15px' }}>
+                    {displayName.charAt(0).toUpperCase()}
+                  </div>
+                  <div className="account-popover-info">
+                    <b>{displayName}</b>
+                    <small>{userEmail}</small>
+                  </div>
+                </div>
+
+                <div className="account-popover-divider" />
+
+                <Link
+                  href="/dashboard/settings"
+                  className="account-popover-item"
+                  onClick={() => { setAccountMenuOpen(false); close(); }}
+                >
+                  <Settings size={16} />
+                  <span>{t('nav_settings')}</span>
+                </Link>
+
+                {!showSignOutConfirm ? (
+                  <button
+                    type="button"
+                    className="account-popover-item signout-item"
+                    onClick={() => setShowSignOutConfirm(true)}
+                  >
+                    <LogOut size={16} />
+                    <span>{t('nav_signout')}</span>
+                  </button>
+                ) : (
+                  <div className="signout-confirm-box">
+                    <p>Are you sure you want to sign out of SunnoBuddy?</p>
+                    <div className="signout-confirm-actions">
+                      <button
+                        type="button"
+                        className="button button-quiet"
+                        style={{ padding: '4px 8px', fontSize: '11px', height: 'auto' }}
+                        onClick={() => setShowSignOutConfirm(false)}
+                        disabled={signingOut}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        className="button button-primary signout-danger-btn"
+                        onClick={() => void handleSignOut()}
+                        disabled={signingOut}
+                      >
+                        {signingOut ? 'Signing out…' : 'Sign out'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <button
+              type="button"
+              className="profile-row"
+              onClick={() => {
+                setAccountMenuOpen((prev) => !prev)
+                setShowSignOutConfirm(false)
+              }}
+              aria-label={`Open account menu for ${displayName}`}
+              aria-expanded={accountMenuOpen}
+            >
+              <div className="profile-avatar">{displayName.charAt(0).toUpperCase()}</div>
+              <span>
+                <b>{displayName}</b>
+                <small>{user?.isAnonymous ? t('nav_status') : (user?.email || 'Account')}</small>
+              </span>
+              <MoreHorizontal size={18} />
+            </button>
+          </div>
         </div>
       </aside>
     </>
   )
 }
 
-function DashboardShell({ children, title, subtitle, active }: { children: React.ReactNode; title: string; subtitle: string; active: string }) {
+function DashboardShell({
+  children,
+  title,
+  subtitle,
+  active,
+  hideFooterDisclaimer = false,
+}: {
+  children: React.ReactNode
+  title: string
+  subtitle: string
+  active: string
+  hideFooterDisclaimer?: boolean
+}) {
   const [menuOpen, setMenuOpen] = useState(false)
-  const { user } = useAuth()
+  const [dropdownOpen, setDropdownOpen] = useState(false)
+  const { user, logOut } = useAuth()
+  const router = useRouter()
   const { t } = useAppLanguage()
   const accountName = user?.isAnonymous ? t('nav_status') : user?.displayName || user?.email || t('nav_account')
+
+  const handleSignOut = async () => {
+    setDropdownOpen(false)
+    await logOut()
+    router.replace('/login')
+  }
+
   return (
     <div className="app-shell">
       <Sidebar active={active} close={() => setMenuOpen(false)} />
@@ -888,14 +1032,78 @@ function DashboardShell({ children, title, subtitle, active }: { children: React
             <h1>{title}</h1>
             <p>{subtitle}</p>
           </div>
-          <div className="header-right">
+          <div className="header-right" style={{ position: 'relative' }}>
             <span className="header-date">
               {new Intl.DateTimeFormat('en', { weekday: 'short', month: 'short', day: 'numeric' }).format(new Date())}
             </span>
             <ThemeToggle />
-            <button className="header-avatar" aria-label={`${accountName} profile`}>
+            <button
+              className="header-avatar"
+              aria-label={`${accountName} profile`}
+              onClick={() => setDropdownOpen((v) => !v)}
+              style={{ cursor: 'pointer' }}
+            >
               {accountName.charAt(0).toUpperCase()}
             </button>
+            {dropdownOpen && (
+              <div
+                className="surface-card"
+                style={{
+                  position: 'absolute',
+                  top: '100%',
+                  right: 0,
+                  marginTop: '8px',
+                  width: '240px',
+                  padding: '12px',
+                  borderRadius: '12px',
+                  boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+                  zIndex: 100,
+                  border: '1px solid var(--border-subtle, #e2eae8)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '8px',
+                }}
+              >
+                <div style={{ paddingBottom: '8px', borderBottom: '1px solid var(--border-subtle, #e2eae8)' }}>
+                  <b style={{ fontSize: '13px', display: 'block', color: 'var(--text-main, #254148)' }}>{accountName}</b>
+                  {user?.email && <small style={{ fontSize: '11px', color: '#83979c', wordBreak: 'break-all' }}>{user.email}</small>}
+                  <span style={{ display: 'inline-block', marginTop: '4px', fontSize: '10px', background: 'rgba(83, 138, 132, 0.1)', color: '#538a84', padding: '2px 6px', borderRadius: '4px' }}>
+                    {user?.isAnonymous ? 'Guest session' : 'Google account'}
+                  </span>
+                </div>
+                <Link
+                  href="/dashboard/settings"
+                  onClick={() => setDropdownOpen(false)}
+                  style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', padding: '6px 4px', color: 'inherit', textDecoration: 'none' }}
+                >
+                  <Settings size={14} />
+                  <span>{t('nav_settings')}</span>
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => void handleSignOut()}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    fontSize: '12px',
+                    padding: '8px 4px',
+                    background: 'none',
+                    border: 'none',
+                    color: '#c05252',
+                    cursor: 'pointer',
+                    fontWeight: 500,
+                    textAlign: 'left',
+                    width: '100%',
+                    borderTop: '1px solid var(--border-subtle, #e2eae8)',
+                    marginTop: '2px',
+                  }}
+                >
+                  <LogOut size={14} />
+                  <span>{t('nav_signout')}</span>
+                </button>
+              </div>
+            )}
           </div>
         </header>
         {menuOpen && (
@@ -905,10 +1113,36 @@ function DashboardShell({ children, title, subtitle, active }: { children: React
         )}
         <main className="page-content">
           {children}
-          <div className="safety-foot">
-            <ShieldCheck size={14} /> {t('hdr_safety')}
-          </div>
+          {!hideFooterDisclaimer && (
+            <footer className="shell-footer-disclaimer">
+              <ShieldCheck size={14} />
+              <span>{t('hdr_safety')}</span>
+            </footer>
+          )}
         </main>
+        {/* Mobile Bottom Navigation for screens < 768px */}
+        <nav className="mobile-bottom-nav" aria-label="Quick mobile navigation">
+          <Link href="/dashboard" className={`mobile-bottom-nav-item ${active === '/dashboard' ? 'is-active' : ''}`}>
+            <Home size={18} />
+            <span>{t('nav_home')}</span>
+          </Link>
+          <Link href="/dashboard/companion" className={`mobile-bottom-nav-item ${active === '/dashboard/companion' ? 'is-active' : ''}`}>
+            <MessageCircle size={18} />
+            <span>{t('nav_companion')}</span>
+          </Link>
+          <Link href="/dashboard/intake" className={`mobile-bottom-nav-item ${active === '/dashboard/intake' ? 'is-active' : ''}`}>
+            <Sparkles size={18} />
+            <span>Reflect</span>
+          </Link>
+          <Link href="/dashboard/mindlog" className={`mobile-bottom-nav-item ${active === '/dashboard/mindlog' ? 'is-active' : ''}`}>
+            <BookHeart size={18} />
+            <span>{t('nav_mindlog')}</span>
+          </Link>
+          <Link href="/dashboard/therapists" className={`mobile-bottom-nav-item ${active === '/dashboard/therapists' ? 'is-active' : ''}`}>
+            <MapPin size={18} />
+            <span>Find Care</span>
+          </Link>
+        </nav>
       </div>
     </div>
   )
@@ -918,10 +1152,120 @@ function MindfulBreathWidget() {
   const [active, setActive] = useState(false)
   const [phase, setPhase] = useState<'Inhale' | 'Hold' | 'Exhale' | 'Rest'>('Inhale')
   const [seconds, setSeconds] = useState(4)
+  const [soundEnabled, setSoundEnabled] = useState(false)
+  const [volume, setVolume] = useState(0.4)
   const { t } = useAppLanguage()
+
+  const audioCtxRef = useRef<AudioContext | null>(null)
+  const masterGainRef = useRef<GainNode | null>(null)
+  const noiseSourceRef = useRef<AudioBufferSourceNode | null>(null)
+
+  // Soft chime on phase change (Web Audio API sine oscillator)
+  const playPhaseChime = (freq: number) => {
+    if (!soundEnabled || !audioCtxRef.current) return
+    try {
+      const ctx = audioCtxRef.current
+      if (ctx.state === 'suspended') {
+        void ctx.resume()
+      }
+      const osc = ctx.createOscillator()
+      const chimeGain = ctx.createGain()
+      osc.type = 'sine'
+      osc.frequency.setValueAtTime(freq, ctx.currentTime)
+      chimeGain.gain.setValueAtTime(0.0001, ctx.currentTime)
+      chimeGain.gain.exponentialRampToValueAtTime(0.18 * volume, ctx.currentTime + 0.04)
+      chimeGain.gain.exponentialRampToValueAtTime(0.00001, ctx.currentTime + 1.2)
+      osc.connect(chimeGain)
+      chimeGain.connect(ctx.destination)
+      osc.start(ctx.currentTime)
+      osc.stop(ctx.currentTime + 1.25)
+    } catch {}
+  }
+
+  // Soft wave pink noise background
+  const startAmbientAudio = () => {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext
+      if (!AudioCtx) return
+      if (!audioCtxRef.current) {
+        audioCtxRef.current = new AudioCtx()
+      }
+      const ctx = audioCtxRef.current
+      if (ctx.state === 'suspended') {
+        void ctx.resume()
+      }
+
+      const bufferSize = ctx.sampleRate * 2
+      const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate)
+      const output = noiseBuffer.getChannelData(0)
+      let b0 = 0, b1 = 0, b2 = 0
+      for (let i = 0; i < bufferSize; i++) {
+        const white = Math.random() * 2 - 1
+        b0 = 0.99886 * b0 + white * 0.0555179
+        b1 = 0.99332 * b1 + white * 0.0750759
+        b2 = 0.96900 * b2 + white * 0.1538520
+        output[i] = (b0 + b1 + b2) * 0.04
+      }
+
+      const whiteNoise = ctx.createBufferSource()
+      whiteNoise.buffer = noiseBuffer
+      whiteNoise.loop = true
+
+      const filter = ctx.createBiquadFilter()
+      filter.type = 'lowpass'
+      filter.frequency.setValueAtTime(300, ctx.currentTime)
+
+      const masterGain = ctx.createGain()
+      masterGain.gain.setValueAtTime(0.12 * volume, ctx.currentTime)
+
+      whiteNoise.connect(filter)
+      filter.connect(masterGain)
+      masterGain.connect(ctx.destination)
+
+      whiteNoise.start()
+      noiseSourceRef.current = whiteNoise
+      masterGainRef.current = masterGain
+    } catch (e) {
+      console.warn('Web Audio error:', e)
+    }
+  }
+
+  const stopAmbientAudio = () => {
+    if (noiseSourceRef.current) {
+      try {
+        noiseSourceRef.current.stop()
+        noiseSourceRef.current.disconnect()
+      } catch {}
+      noiseSourceRef.current = null
+    }
+    if (audioCtxRef.current) {
+      try {
+        void audioCtxRef.current.close()
+      } catch {}
+      audioCtxRef.current = null
+    }
+  }
+
+  const toggleSound = () => {
+    if (!soundEnabled) {
+      setSoundEnabled(true)
+      startAmbientAudio()
+    } else {
+      setSoundEnabled(false)
+      stopAmbientAudio()
+    }
+  }
+
+  useEffect(() => {
+    if (masterGainRef.current && audioCtxRef.current) {
+      masterGainRef.current.gain.setValueAtTime(0.12 * volume, audioCtxRef.current.currentTime)
+    }
+  }, [volume])
 
   useEffect(() => {
     if (!active) {
+      stopAmbientAudio()
+      setSoundEnabled(false)
       setPhase('Inhale')
       setSeconds(4)
       return
@@ -930,16 +1274,37 @@ function MindfulBreathWidget() {
       setSeconds((prev) => {
         if (prev > 1) return prev - 1
         setPhase((current) => {
-          if (current === 'Inhale') return 'Hold'
-          if (current === 'Hold') return 'Exhale'
-          if (current === 'Exhale') return 'Rest'
-          return 'Inhale'
+          let nextPhase: 'Inhale' | 'Hold' | 'Exhale' | 'Rest' = 'Inhale'
+          let freq = 528
+          if (current === 'Inhale') {
+            nextPhase = 'Hold'
+            freq = 594
+          } else if (current === 'Hold') {
+            nextPhase = 'Exhale'
+            freq = 440
+          } else if (current === 'Exhale') {
+            nextPhase = 'Rest'
+            freq = 396
+          } else {
+            nextPhase = 'Inhale'
+            freq = 528
+          }
+          if (soundEnabled) {
+            playPhaseChime(freq)
+          }
+          return nextPhase
         })
         return 4
       })
     }, 1000)
     return () => clearInterval(timer)
-  }, [active])
+  }, [active, soundEnabled, volume])
+
+  useEffect(() => {
+    return () => {
+      stopAmbientAudio()
+    }
+  }, [])
 
   return (
     <div className={`mindful-widget ${active ? 'is-active' : ''}`}>
@@ -971,14 +1336,26 @@ function MindfulBreathWidget() {
             </b>
             <small>Take your time. Ground yourself in this present moment.</small>
           </div>
-          <button
-            type="button"
-            className="mindful-close"
-            onClick={() => setActive(false)}
-            aria-label="Close mindful pause"
-          >
-            <X size={15} />
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: 'auto' }}>
+            <button
+              type="button"
+              className="button button-quiet"
+              onClick={toggleSound}
+              style={{ padding: '6px', height: 'auto', borderRadius: '50%', color: soundEnabled ? '#538a84' : '#83979c' }}
+              title={soundEnabled ? 'Mute ambient sound' : 'Unmute gentle ocean breathing audio'}
+              aria-label={soundEnabled ? 'Mute ambient sound' : 'Unmute gentle ocean breathing audio'}
+            >
+              {soundEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />}
+            </button>
+            <button
+              type="button"
+              className="mindful-close"
+              onClick={() => setActive(false)}
+              aria-label="Close mindful pause"
+            >
+              <X size={15} />
+            </button>
+          </div>
         </div>
       )}
     </div>
@@ -987,22 +1364,55 @@ function MindfulBreathWidget() {
 
 function DashboardHome() {
   const { user } = useAuth()
-  const { t } = useAppLanguage()
+  const { lang, t } = useAppLanguage()
   const name = user?.isAnonymous ? t('nav_status') : user?.displayName?.split(' ')[0] || 'friend'
   const [recentEntries, setRecentEntries] = useState<MindLogEntry[]>([])
   const [entryCount, setEntryCount] = useState(0)
   const [latestEmotion, setLatestEmotion] = useState<EmotionAnalysis | null>(null)
+  const [intakeDone, setIntakeDone] = useState(false)
+  const [intakeStatus, setIntakeStatus] = useState<IntakeUserStatus | null>(null)
   const [dashboardLoading, setDashboardLoading] = useState(true)
   const [dashboardError, setDashboardError] = useState('')
-  const [thoughtIndex, setThoughtIndex] = useState(() => {
-    const date = new Date()
-    const start = new Date(date.getFullYear(), 0, 0)
-    const dayOfYear = Math.floor((date.getTime() - start.getTime()) / 86400000)
-    return (dayOfYear - 1 + dailyThoughts.length) % dailyThoughts.length
+  const [thoughtOffset, setThoughtOffset] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const stored = sessionStorage.getItem('sunnobuddy_thought_offset')
+      return stored ? parseInt(stored, 10) : 0
+    }
+    return 0
   })
+  const [copiedThought, setCopiedThought] = useState(false)
+
+  const currentThoughtText = getDailyThoughtText(new Date(), lang, thoughtOffset)
+
+  const nextThought = () => {
+    setThoughtOffset((prev) => {
+      const next = prev + 1
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem('sunnobuddy_thought_offset', String(next))
+      }
+      return next
+    })
+  }
+
+  const copyThought = async () => {
+    try {
+      await navigator.clipboard.writeText(currentThoughtText)
+      setCopiedThought(true)
+      setTimeout(() => setCopiedThought(false), 2000)
+    } catch {}
+  }
 
   useEffect(() => {
     let active = true
+    services.getIntakeStatus()
+      .then((st) => {
+        if (active) {
+          setIntakeStatus(st)
+          if (st.completed) setIntakeDone(true)
+        }
+      })
+      .catch(() => {})
+
     services.listMindLogs()
       .then(async (logs) => {
         const sorted = [...logs].sort((a, b) => new Date(b.date || b.created_at).getTime() - new Date(a.date || a.created_at).getTime())
@@ -1030,10 +1440,6 @@ function DashboardHome() {
     }
   }, [])
 
-  const nextThought = () => {
-    setThoughtIndex((prev) => (prev + 1) % dailyThoughts.length)
-  }
-
   return (
     <DashboardShell title="A moment for you" subtitle={`Welcome back, ${name}. How are you feeling today?`} active="/dashboard">
       <section className="welcome-banner">
@@ -1048,19 +1454,46 @@ function DashboardHome() {
                 <Sun size={13} />
                 <span>{t('dash_thought_badge')}</span>
               </span>
-              <button
-                type="button"
-                className="thought-refresh"
-                onClick={nextThought}
-                title="Get another comforting thought"
-                aria-label="Get another comforting thought"
-              >
-                <Sparkles size={12} />
-                <span>{t('dash_thought_refresh')}</span>
-              </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <button
+                  type="button"
+                  className="thought-refresh"
+                  onClick={() => void copyThought()}
+                  title="Save or copy this thought"
+                  aria-label="Save or copy this thought"
+                >
+                  {copiedThought ? <Check size={12} style={{ color: '#538a84' }} /> : <Copy size={12} />}
+                  <span>{copiedThought ? 'Saved!' : 'Save'}</span>
+                </button>
+                <button
+                  type="button"
+                  className="thought-refresh"
+                  onClick={nextThought}
+                  title="Explore another comforting thought"
+                  aria-label="Explore another comforting thought"
+                >
+                  <Sparkles size={12} />
+                  <span>{t('dash_thought_refresh')}</span>
+                </button>
+              </div>
             </div>
-            <p className="daily-thought-text">“{dailyThoughts[thoughtIndex]}”</p>
+            <p className="daily-thought-text">“{currentThoughtText}”</p>
           </div>
+
+          {intakeStatus?.monthly_checkin_due && (
+            <div className="monthly-checkin-banner">
+              <div className="monthly-checkin-icon"><Sparkles size={20} /></div>
+              <div className="monthly-checkin-info">
+                <b>Monthly Wellness Check-In Ready</b>
+                <p>
+                  It has been ~{intakeStatus.days_since_last_checkin || 30} days since your last reflection. Take a few quiet minutes to see how your patterns and feelings have evolved.
+                </p>
+              </div>
+              <Link href="/dashboard/intake" className="button button-primary" style={{ padding: '7px 14px', fontSize: '12.5px', whiteSpace: 'nowrap' }}>
+                Start Check-In <ArrowRight size={14} />
+              </Link>
+            </div>
+          )}
 
           <div className="welcome-actions">
             <MindfulBreathWidget />
@@ -1177,8 +1610,14 @@ function DashboardHome() {
           )}
           <div className="intake-progress">
             <span>Guided reflection</span>
-            <span>Open to view progress</span>
-            <Link href="/dashboard/intake">Continue reflection</Link>
+            <span>
+              {intakeStatus?.can_compare
+                ? `${intakeStatus.total_assessments ?? 2} check-ins saved`
+                : intakeDone
+                ? 'Completed'
+                : 'Open to view progress'}
+            </span>
+            <Link href="/dashboard/intake">{intakeDone ? 'View reflection & growth' : 'Continue reflection'}</Link>
           </div>
         </article>
       </section>
@@ -1194,6 +1633,10 @@ function Companion() {
   const threadEndRef = useRef<HTMLDivElement>(null)
   const [sending, setSending] = useState(false)
   const [sessionId, setSessionId] = useState<string>()
+  const [sessions, setSessions] = useState<ChatSession[]>([])
+  const [loadingSessions, setLoadingSessions] = useState(false)
+  const [loadingHistory, setLoadingHistory] = useState(false)
+  const [showSessionsDrawer, setShowSessionsDrawer] = useState(false)
   const [apiError, setApiError] = useState('')
   const [crisisNotice, setCrisisNotice] = useState<{ detected: boolean; helplines: Array<{ name: string; phone: string; url?: string }> } | null>(null)
   const [recording, setRecording] = useState(false)
@@ -1244,6 +1687,99 @@ function Companion() {
     setRecordSeconds(0)
   }
 
+  const loadHistory = async (targetId: string) => {
+    setLoadingHistory(true)
+    setApiError('')
+    try {
+      const history = await services.getChatHistory(targetId)
+      const mapped = history.map((m) => ({
+        who: m.role === 'user' ? 'you' : 'buddy',
+        text: m.content,
+      }))
+      setMessages(mapped)
+      setSessionId(targetId)
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('sunnobuddy_active_session_id', targetId)
+      }
+    } catch (err) {
+      console.warn('Failed to load chat history:', err)
+      setApiError('Could not restore conversation history.')
+    } finally {
+      setLoadingHistory(false)
+    }
+  }
+
+  const refreshSessionsList = async () => {
+    try {
+      setLoadingSessions(true)
+      const list = await services.listChatSessions()
+      setSessions(list)
+      return list
+    } catch (err) {
+      console.warn('Failed to list sessions:', err)
+      return []
+    } finally {
+      setLoadingSessions(false)
+    }
+  }
+
+  useEffect(() => {
+    let active = true
+    const initSessions = async () => {
+      const list = await refreshSessionsList()
+      if (!active) return
+      const storedId = typeof window !== 'undefined' ? localStorage.getItem('sunnobuddy_active_session_id') : null
+      const target = storedId && list.some((s) => s.session_id === storedId)
+        ? storedId
+        : list[0]?.session_id
+      if (target) {
+        setSessionId(target)
+        void loadHistory(target)
+      }
+    }
+    void initSessions()
+    return () => {
+      active = false
+    }
+  }, [])
+
+  const handleNewConversation = () => {
+    setApiError('')
+    setRetryMessage('')
+    setText('')
+    setMessages([])
+    const tempId = `temp_${Date.now()}`
+    setSessionId(tempId)
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('sunnobuddy_active_session_id')
+    }
+    setShowSessionsDrawer(false)
+  }
+
+  const handleDeleteSession = async (delId: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    try {
+      await services.deleteChatSession(delId)
+      const updated = sessions.filter((s) => s.session_id !== delId)
+      setSessions(updated)
+      if (sessionId === delId) {
+        const next = updated[0]?.session_id
+        if (next) {
+          setSessionId(next)
+          void loadHistory(next)
+        } else {
+          setSessionId(undefined)
+          if (typeof window !== 'undefined') {
+            localStorage.removeItem('sunnobuddy_active_session_id')
+          }
+          setMessages([])
+        }
+      }
+    } catch (err) {
+      console.warn('Could not delete session:', err)
+    }
+  }
+
   useEffect(() => {
     threadEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
   }, [messages, sending, apiError, crisisNotice, recording])
@@ -1265,13 +1801,25 @@ function Companion() {
     setSending(true)
     try {
       const effLang = getEffectiveLang()
-      const result = await services.sendChat(message, effLang, sessionId)
+      const effectiveSessionId = sessionId && !sessionId.startsWith('temp_') ? sessionId : undefined
+      const result = await services.sendChat(message, effLang, effectiveSessionId)
       setSessionId(result.session_id)
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('sunnobuddy_active_session_id', result.session_id)
+      }
       setCrisisNotice({ detected: Boolean(result.crisis_detected), helplines: result.helplines ?? [] })
       if (!result.crisis_detected) setMessages((old) => [...old, { who: 'buddy', text: result.reply }])
+      void refreshSessionsList()
     } catch (cause) {
       setRetryMessage(message)
-      setApiError(cause instanceof Error ? cause.message : 'The message could not be sent. Please try again.')
+      const errMsg = cause instanceof Error ? cause.message : 'The message could not be sent. Please try again.'
+      if (errMsg.toLowerCase().includes('session not found') || errMsg.toLowerCase().includes('not found')) {
+        setSessionId(undefined)
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('sunnobuddy_active_session_id')
+        }
+      }
+      setApiError(errMsg)
     } finally {
       setSending(false)
     }
@@ -1397,20 +1945,123 @@ function Companion() {
               <b>SunnoBuddy</b>
               <small><i /> {t('chat_online')}</small>
             </div>
-            <span className="chat-private"><LockKeyhole size={13} /> Private conversation</span>
+            <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <button
+                type="button"
+                className="button button-quiet"
+                style={{ fontSize: '11px', padding: '5px 10px', height: 'auto', display: 'inline-flex', alignItems: 'center', gap: '5px' }}
+                onClick={() => setShowSessionsDrawer((v) => !v)}
+                title="View previous conversations"
+                aria-label="View previous conversations"
+              >
+                <Clock3 size={13} />
+                <span>History ({sessions.length})</span>
+              </button>
+              <button
+                type="button"
+                className="button button-quiet"
+                style={{ fontSize: '11px', padding: '5px 10px', height: 'auto', display: 'inline-flex', alignItems: 'center', gap: '5px' }}
+                onClick={() => void handleNewConversation()}
+                disabled={sending}
+                title="Start a new conversation"
+                aria-label="Start a new conversation"
+              >
+                <Plus size={13} />
+                <span>New</span>
+              </button>
+              <span className="chat-private"><LockKeyhole size={13} /> Private</span>
+            </div>
           </header>
+
+          {showSessionsDrawer && (
+            <div
+              className="surface-card"
+              style={{
+                margin: '10px 18px',
+                padding: '12px 16px',
+                border: '1px solid var(--border-subtle, #e6edef)',
+                borderRadius: '8px',
+                maxHeight: '220px',
+                overflowY: 'auto',
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <span style={{ fontSize: '10px', fontWeight: 600, letterSpacing: '0.8px', color: '#6c9289' }}>
+                  CONVERSATION HISTORY
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowSessionsDrawer(false)}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#83979c', padding: 2 }}
+                >
+                  <X size={14} />
+                </button>
+              </div>
+              {sessions.length === 0 ? (
+                <p style={{ fontSize: '12px', color: '#83979c', margin: '4px 0' }}>No previous conversations saved yet.</p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  {sessions.map((s) => (
+                    <div
+                      key={s.session_id}
+                      onClick={() => {
+                        void loadHistory(s.session_id)
+                        setShowSessionsDrawer(false)
+                      }}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '6px 10px',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        backgroundColor: s.session_id === sessionId ? 'rgba(83, 138, 132, 0.12)' : 'transparent',
+                        fontSize: '12px',
+                        transition: 'background 0.15s ease',
+                      }}
+                    >
+                      <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '78%' }}>
+                        <span style={{ fontWeight: s.session_id === sessionId ? 600 : 400 }}>{s.title || 'Conversation'}</span>
+                        {s.created_at && (
+                          <span style={{ fontSize: '10px', color: '#83979c', marginLeft: '8px' }}>
+                            {new Date(s.created_at).toLocaleDateString()}
+                          </span>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={(e) => void handleDeleteSession(s.session_id, e)}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#a4b2b6', padding: '3px' }}
+                        title="Delete conversation"
+                        aria-label="Delete conversation"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="chat-thread">
             <div className="chat-date">TODAY · A FRESH START</div>
-            <div className="chat-message">
-              <div className="tiny-mascot"><Logo variant="mascot" alt="" /></div>
-              <div>
-                <div className="bubble bubble-buddy">
-                  {t('chat_welcome')}
+            {loadingHistory && (
+              <p role="status" className="chat-status" style={{ textAlign: 'center', padding: '12px 0' }}>
+                Restoring conversation history…
+              </p>
+            )}
+            {messages.length === 0 && !loadingHistory && (
+              <div className="chat-message">
+                <div className="tiny-mascot"><Logo variant="mascot" alt="" /></div>
+                <div>
+                  <div className="bubble bubble-buddy">
+                    {t('chat_welcome')}
+                  </div>
+                  <span className="message-time">Just now</span>
                 </div>
-                <span className="message-time">Just now</span>
               </div>
-            </div>
+            )}
 
             {messages.map((message, index) => (
               <div className={`chat-message ${message.who === 'you' ? 'user-message' : ''}`} key={`${index}-${message.who}`}>
@@ -1461,15 +2112,57 @@ function Companion() {
             )}
 
             {crisisNotice?.detected && (
-              <div className="safety-alert" role="alert">
-                <b>You deserve immediate care and support.</b>
-                <p>If you may be in danger, contact local emergency services. Support options from your care team:</p>
-                {crisisNotice.helplines.map((line) => (
-                  <p key={`${line.name}-${line.phone}`}>
-                    {line.name}: <a href={`tel:${line.phone}`}>{line.phone}</a>
-                    {line.url && <> · <a href={line.url} target="_blank" rel="noreferrer">Visit</a></>}
-                  </p>
-                ))}
+              <div className="crisis-panel-container" role="alert" aria-live="assertive">
+                <div className="crisis-panel-header">
+                  <ShieldCheck size={20} />
+                  <h3>You deserve immediate care and gentle support</h3>
+                </div>
+                <p className="crisis-panel-intro">
+                  Things feel intensely heavy right now, and you do not have to carry this alone. SunnoBuddy is an AI companion and cannot replace human emergency support. If you or someone you know may be in immediate danger, please connect with someone you trust or reach out to these free, confidential, 24/7 helplines right now.
+                </p>
+
+                <div className="crisis-immediate-alert">
+                  <Phone size={15} style={{ flexShrink: 0, marginTop: '2px' }} />
+                  <div>
+                    <b>Immediate danger or self-harm emergency?</b>
+                    <span> Call <b>112</b> (All-India Emergency) immediately, or sit with a family member or friend you trust.</span>
+                  </div>
+                </div>
+
+                <div className="crisis-cards-grid">
+                  {(crisisNotice.helplines && crisisNotice.helplines.length > 0
+                    ? crisisNotice.helplines
+                    : [
+                        { name: 'Tele-MANAS (Govt. of India)', number: '14416', hours: '24/7 Toll-Free Support (20+ Languages)', url: 'https://telemanas.mohfw.gov.in' },
+                        { name: 'KIRAN Helpline (Govt. of India)', number: '1800-599-0019', hours: '24/7 Multi-language Assistance', url: 'https://www.mentalhealthindia.org' },
+                        { name: 'Vandrevala Foundation', number: '+91 9999 666 555', hours: '24/7 Call & WhatsApp Support', url: 'https://www.vandrevalafoundation.com' },
+                        { name: 'Emergency Services', number: '112', hours: 'Immediate 24/7 Police, Ambulance, Fire', url: 'https://112.gov.in' },
+                      ]
+                  ).map((line: any) => {
+                    const cleanPhone = (line.phone || line.number || '').replace(/[^\d+]/g, '')
+                    return (
+                      <div className="crisis-card-item" key={line.name}>
+                        <div>
+                          <span className="crisis-card-title">{line.name}</span>
+                          <span className="crisis-card-desc">{line.hours || line.desc || 'Free & confidential crisis care'}</span>
+                        </div>
+                        <a href={`tel:${cleanPhone}`} className="crisis-call-btn">
+                          <Phone size={13} /> Call {line.number || line.phone}
+                        </a>
+                      </div>
+                    )
+                  })}
+                </div>
+
+                <div className="crisis-dismiss-row">
+                  <button
+                    type="button"
+                    className="crisis-continue-btn"
+                    onClick={() => setCrisisNotice({ detected: false, helplines: [] })}
+                  >
+                    I am safe right now · Continue companion conversation
+                  </button>
+                </div>
               </div>
             )}
 
@@ -1504,7 +2197,7 @@ function Companion() {
                     <span className="record-red-dot" /> {t('chat_listening')} ({formatDuration(recordSeconds)})
                   </span>
                 ) : (
-                  t('chat_placeholder')
+                  'Press Enter ↵ to send · Shift+Enter for new line'
                 )}
               </span>
 
@@ -1546,10 +2239,6 @@ function Companion() {
             </div>
           </div>
         </section>
-
-        <div className="companion-note">
-          <ShieldCheck size={15} /> {t('chat_footer_note')}
-        </div>
       </div>
     </DashboardShell>
   )
@@ -1568,6 +2257,114 @@ function Intake() {
   const [finished, setFinished] = useState(false)
   const [intakeLoading, setIntakeLoading] = useState(false)
   const [intakeError, setIntakeError] = useState('')
+  const [assessmentReport, setAssessmentReport] = useState<any>(null)
+  const [intakeHistory, setIntakeHistory] = useState<Array<any>>([])
+  const [selectedHistorySession, setSelectedHistorySession] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState<'report' | 'comparison'>('report')
+  const [comparisonData, setComparisonData] = useState<any>(null)
+  const [loadingComparison, setLoadingComparison] = useState(false)
+  const [comparePrevId, setComparePrevId] = useState<string>('')
+
+  const loadComparison = async (prevId?: string) => {
+    setLoadingComparison(true)
+    try {
+      const data = await services.getIntakeComparison(undefined, prevId || undefined)
+      setComparisonData(data)
+      if (data?.previous_session_id) {
+        setComparePrevId(data.previous_session_id)
+      }
+    } catch (err) {
+      console.warn('Could not load monthly comparison:', err)
+    } finally {
+      setLoadingComparison(false)
+    }
+  }
+
+  const unwrapReport = (raw: any): any => {
+    if (!raw) return null
+    if (raw.assessment_report && typeof raw.assessment_report === 'object') return unwrapReport(raw.assessment_report)
+    if (raw.report && typeof raw.report === 'object') return unwrapReport(raw.report)
+    return raw
+  }
+
+  const loadAssessmentData = async (activeSessionId?: string, fallbackReport?: any) => {
+    if (fallbackReport) {
+      const u = unwrapReport(fallbackReport)
+      if (u) setAssessmentReport(u)
+    }
+    try {
+      const history = await services.getIntakeHistory()
+      setIntakeHistory(history || [])
+      const targetId = activeSessionId || history?.[0]?.session_id
+      if (targetId) {
+        setSelectedHistorySession(targetId)
+        const report = await services.getIntakeAssessment(targetId)
+        const unwrapped = unwrapReport(report)
+        if (unwrapped) setAssessmentReport(unwrapped)
+      }
+    } catch (err) {
+      console.warn('Could not load assessment report:', err)
+    }
+  }
+
+  useEffect(() => {
+    let active = true
+    const checkStatus = async () => {
+      try {
+        const res = await services.getIntakeStatus()
+        if (!active) return
+        if (res.completed) {
+          setFinished(true)
+          setStarted(true)
+          setCompletedCount(res.answers_count || 26)
+          setTotalCount(res.total_questions || 26)
+          const direct = unwrapReport(res.latest_report || res.assessment_report || res.report)
+          if (direct) setAssessmentReport(direct)
+          void loadAssessmentData(res.session_id, direct)
+        }
+      } catch (err) {
+        console.warn('Could not check intake completion status:', err)
+      }
+    }
+    void checkStatus()
+    return () => {
+      active = false
+    }
+  }, [])
+
+  const retakeReflection = async () => {
+    setIntakeLoading(true)
+    setIntakeError('')
+    try {
+      const res = await services.retakeIntake()
+      setFinished(false)
+      setActiveTab('report')
+      setComparisonData(null)
+      setAnswers([])
+      setAssessmentReport(null)
+      setCompletedCount(0)
+      setTotalCount(res.total_questions ?? 26)
+      setCurrentQuestion(res.question || 'How are you feeling in this moment?')
+      setQuestionId(res.question_id ?? 'Q1')
+      setIsFollowUp(Boolean(res.follow_up_required))
+      setStarted(true)
+    } catch (err) {
+      setIntakeError(err instanceof Error ? err.message : 'Could not restart intake.')
+    } finally {
+      setIntakeLoading(false)
+    }
+  }
+
+  const selectHistoryVersion = async (sid: string) => {
+    setSelectedHistorySession(sid)
+    try {
+      const report = await services.getIntakeAssessment(sid)
+      const unwrapped = unwrapReport(report)
+      if (unwrapped) setAssessmentReport(unwrapped)
+    } catch (err) {
+      console.warn('Could not load selected assessment version:', err)
+    }
+  }
 
   const beginReflection = async () => {
     if (!user) return
@@ -1580,6 +2377,7 @@ function Intake() {
       if (result.completed) {
         setFinished(true)
         setStarted(true)
+        void loadAssessmentData()
       } else if (result.question) {
         setCurrentQuestion(result.question)
         setQuestionId(result.question_id ?? '')
@@ -1609,6 +2407,7 @@ function Intake() {
       setAnswer('')
       if (result.completed) {
         setFinished(true)
+        void loadAssessmentData()
       } else if (result.question) {
         setCurrentQuestion(result.question)
         setQuestionId(result.question_id ?? '')
@@ -1672,12 +2471,343 @@ function Intake() {
             </section>
           </>
         ) : finished ? (
-          <section className="intake-done">
-            <div className="done-check"><Check size={27} /></div>
-            <span className="eyebrow">THAT’S A LOVELY START</span>
-            <h2>Thank you for<br />showing up <em>for you.</em></h2>
-            <p>You’ve completed this reflection. {completedCount !== null && <>You answered {completedCount}{totalCount !== null ? ` of ${totalCount}` : ''} questions. </>}It’s okay to take a moment and notice how that felt.</p>
-            <Link href="/dashboard" className="button button-primary">Back to your space <ArrowRight size={16} /></Link>
+          <section className="intake-done" style={{ textAlign: 'left', maxWidth: '860px', margin: '0 auto' }}>
+            <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+              <div className="done-check" style={{ margin: '0 auto 12px' }}><Check size={27} /></div>
+              <span className="eyebrow">THAT’S A LOVELY START</span>
+              <h2>Thank you for<br />showing up <em>for you.</em></h2>
+              <p style={{ maxWidth: '540px', margin: '8px auto' }}>
+                You’ve completed your guided reflection. {completedCount !== null && <>You answered {completedCount}{totalCount !== null ? ` of ${totalCount}` : ''} questions. </>}
+                Here is your comprehensive, non-diagnostic Guided Intake Assessment Report.
+              </p>
+              <div style={{ display: 'flex', gap: '10px', marginTop: '16px', justifyContent: 'center', flexWrap: 'wrap' }}>
+                <Link href="/dashboard" className="button button-primary">Back to your space <ArrowRight size={16} /></Link>
+                <button
+                  type="button"
+                  className="button button-quiet"
+                  onClick={() => void retakeReflection()}
+                  disabled={intakeLoading}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                >
+                  <RotateCcw size={15} /> {intakeLoading ? 'Restarting…' : 'Retake Guided Intake (New Version)'}
+                </button>
+              </div>
+            </div>
+
+            {/* View Tabs: Current Report vs. Monthly Comparison */}
+            <div className="comparison-tabs-bar" style={{ justifyContent: 'center' }}>
+              <button
+                type="button"
+                className={`comparison-tab-btn ${activeTab === 'report' ? 'is-active' : ''}`}
+                onClick={() => setActiveTab('report')}
+              >
+                <FileText size={16} /> Current Reflection Report
+              </button>
+              <button
+                type="button"
+                className={`comparison-tab-btn ${activeTab === 'comparison' ? 'is-active' : ''}`}
+                onClick={() => {
+                  setActiveTab('comparison')
+                  if (!comparisonData && !loadingComparison) {
+                    void loadComparison()
+                  }
+                }}
+              >
+                <Sparkles size={16} /> Monthly Comparison & Growth
+              </button>
+            </div>
+
+            {activeTab === 'report' ? (
+              <>
+                {/* Assessment History Versions */}
+                {intakeHistory.length > 1 && (
+                  <div className="surface-card" style={{ padding: '16px 20px', marginBottom: '24px', borderRadius: '12px' }}>
+                    <span className="eyebrow" style={{ display: 'block', marginBottom: '8px' }}>INTAKE ASSESSMENT HISTORY</span>
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                      {intakeHistory.map((item, idx) => (
+                        <button
+                          key={item.session_id}
+                          type="button"
+                          onClick={() => void selectHistoryVersion(item.session_id)}
+                          className={`button ${selectedHistorySession === item.session_id ? 'button-primary' : 'button-outline'}`}
+                          style={{ fontSize: '12px', padding: '6px 12px', height: 'auto' }}
+                        >
+                          Version {item.version || (intakeHistory.length - idx)} · {item.completed_at ? new Date(item.completed_at).toLocaleDateString() : 'Assessment'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* 10-Section Comprehensive Guided Intake Assessment Report */}
+                {assessmentReport ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                    <div className="surface-card" style={{ padding: '24px 28px', borderRadius: '14px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px', flexWrap: 'wrap', gap: '10px' }}>
+                        <div>
+                          <span className="eyebrow">GUIDED INTAKE ASSESSMENT REPORT</span>
+                          <h3 style={{ margin: 0, fontSize: '20px', fontWeight: 600 }}>Personal Wellness Synthesis</h3>
+                        </div>
+                        <span className="soft-pill" style={{ background: 'rgba(83,138,132,0.15)', color: 'var(--text-main, #254148)', fontWeight: 600, fontSize: '11px' }}>
+                          Non-Diagnostic Educational Overview
+                        </span>
+                      </div>
+
+                      {/* Executive Summary */}
+                      <div className="report-summary-highlight">
+                        <h4>Executive Reflection Summary</h4>
+                        <p>
+                          {assessmentReport.summary ||
+                            'A comprehensive, supportive synthesis of your 26 guided reflection responses, designed to honor your lived experiences and inform future SunnoBuddy Companion dialogues.'}
+                        </p>
+                        {assessmentReport.version && (
+                          <div style={{ marginTop: '10px', fontSize: '11px', opacity: 0.8, fontWeight: 500 }}>
+                            Assessment Version {assessmentReport.version} · {assessmentReport.generated_at ? new Date(assessmentReport.generated_at).toLocaleDateString() : 'Personal Report'}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Group 1: Foundation & Emotional Landscape */}
+                      <div className="report-section-group">
+                        <div className="report-group-title">
+                          <span>01</span> Foundation & Emotional Landscape
+                        </div>
+                        <div className="report-grid-duo">
+                          <div className="report-card-rich">
+                            <h5>1. Personal Background & Daily Context</h5>
+                            <p>{assessmentReport.personal_context || assessmentReport.personal_background || 'Background and routines captured from your guided check-in.'}</p>
+                          </div>
+                          <div className="report-card-rich">
+                            <h5>2. Current Emotional State & Concerns</h5>
+                            <p>{assessmentReport.emotional_state || assessmentReport.emotional_concerns || assessmentReport.primary_emotional_concerns || 'Emotional landscape and felt experiences identified in your responses.'}</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Group 2: Pressures & Observed Connections */}
+                      <div className="report-section-group">
+                        <div className="report-group-title">
+                          <span>02</span> Pressures & Observed Connections
+                        </div>
+                        <div className="report-grid-duo">
+                          <div className="report-card-rich">
+                            <h5>3. Main Stressors & Daily Pressures</h5>
+                            <p>{assessmentReport.main_stressors || assessmentReport.current_challenges || assessmentReport.stressors_and_triggers || 'Key situational, interpersonal, and environmental pressures.'}</p>
+                          </div>
+                          <div className="report-card-rich">
+                            <h5>4. Patterns & Emotional Triggers</h5>
+                            <p>{assessmentReport.patterns_and_triggers || assessmentReport.patterns_themes || 'Observed connections across daily demands, fatigue, and emotional triggers.'}</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Group 3: Resources & Support Systems */}
+                      <div className="report-section-group">
+                        <div className="report-group-title">
+                          <span>03</span> Resources & Support Systems
+                        </div>
+                        <div className="report-grid-duo">
+                          <div className="report-card-rich">
+                            <h5>5. Coping Strategies Currently Used</h5>
+                            <p>{assessmentReport.coping_strategies || assessmentReport.strengths_coping || 'Existing coping patterns, self-soothing methods, and recovery habits noted in your responses.'}</p>
+                          </div>
+                          <div className="report-card-rich">
+                            <h5>6. Support System & Connection Preferences</h5>
+                            <p>{assessmentReport.support_system || assessmentReport.support_preferences || 'Connection comfort levels with friends, family, and professional mental health support.'}</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Group 4: Resilience & Growth Themes */}
+                      <div className="report-section-group">
+                        <div className="report-group-title">
+                          <span>04</span> Resilience & Growth Themes
+                        </div>
+                        <div className="report-grid-duo">
+                          <div className="report-card-rich">
+                            <h5>7. Personal Strengths & Resilience Factors</h5>
+                            <p>{assessmentReport.personal_strengths || assessmentReport.strengths_and_resilience || 'Inner resources, self-honesty, and adaptive strengths demonstrated across your reflection.'}</p>
+                          </div>
+                          <div className="report-card-rich">
+                            <h5>8. Core Recurring Themes</h5>
+                            <p>{assessmentReport.recurring_themes || assessmentReport.patterns_themes || 'Core threads of balance, boundaries, and personal meaning highlighted in your answers.'}</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Group 5: Actionable Companion Takeaways */}
+                      <div className="report-section-group" style={{ marginBottom: '14px' }}>
+                        <div className="report-group-title">
+                          <span>05</span> Actionable Companion Takeaways
+                        </div>
+                        <div className="report-card-rich" style={{ marginBottom: '12px' }}>
+                          <h5>9. Suggested Focus Areas for SunnoBuddy Companion</h5>
+                          <p>{assessmentReport.companion_focus || assessmentReport.focus_areas || assessmentReport.companion_goals || 'Recommended focus topics and gentle reflection intentions for future Companion dialogues.'}</p>
+                        </div>
+
+                        <div className="report-card-rich">
+                          <h5>10. Recommended Self-Care & Wellness Practices</h5>
+                          {Array.isArray(assessmentReport.personalized_next_steps || assessmentReport.recommended_self_care || assessmentReport.self_care_recommendations) ? (
+                            <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '13px', lineHeight: 1.7 }}>
+                              {(assessmentReport.personalized_next_steps || assessmentReport.recommended_self_care || assessmentReport.self_care_recommendations).map((item: string, i: number) => (
+                                <li key={i}>{item}</li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <p style={{ margin: 0, fontSize: '13px', lineHeight: 1.6 }}>
+                              {assessmentReport.self_care_recommendations || assessmentReport.recommended_self_care || 'Gentle daily mindfulness, breathwork, and emotional pacing suggestions.'}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Non-Diagnostic Summary / Disclaimer Notice */}
+                      <div className="intake-summary-card" style={{ marginTop: '16px' }}>
+                        <b style={{ fontSize: '12px', display: 'block', marginBottom: '4px' }}>Non-Diagnostic Summary & Ethical Transparency Notice</b>
+                        <p style={{ fontSize: '11px', margin: 0, lineHeight: 1.5, opacity: 0.9 }}>
+                          {assessmentReport.disclaimer || assessmentReport.non_diagnostic_summary || 'This synthesis is created to foster gentle self-reflection and assist your companion conversations. It does not replace medical or mental health evaluation.'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+              </>
+            ) : (
+              /* Monthly Comparison & Growth View */
+              <div>
+                {loadingComparison ? (
+                  <div className="surface-card" style={{ padding: '40px 24px', textAlign: 'center', borderRadius: '14px' }}>
+                    <p className="chat-status" style={{ margin: 0 }}>
+                      Synthesizing your monthly reflections and personal growth…
+                    </p>
+                  </div>
+                ) : !comparisonData?.can_compare ? (
+                  <div className="surface-card comparison-baseline-card">
+                    <div className="comparison-baseline-icon"><Calendar size={26} /></div>
+                    <h3 style={{ fontSize: '18px', fontWeight: 600, margin: '0 0 10px', color: 'var(--text-main, #254148)' }}>
+                      This is your baseline reflection
+                    </h3>
+                    <p style={{ maxWidth: '580px', margin: '0 auto 20px', fontSize: '13px', lineHeight: 1.6, color: 'var(--text-subtle, #53727a)' }}>
+                      {comparisonData?.message ||
+                        "This is your starting point. Your future monthly check-ins will help you reflect on changes over time. Once you complete your next monthly wellness check-in, you'll see a thoughtful side-by-side comparison of your emotional patterns, coping strategies, and personal growth right here."}
+                    </p>
+                    <button
+                      type="button"
+                      className="button button-primary"
+                      onClick={() => void retakeReflection()}
+                      disabled={intakeLoading}
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                    >
+                      <RotateCcw size={15} /> Start Next Check-in (New Version)
+                    </button>
+                  </div>
+                ) : (
+                  <div className="comparison-wrap">
+                    {/* Version Selector Bar */}
+                    <div className="surface-card" style={{ padding: '14px 18px', borderRadius: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+                      <div>
+                        <span className="eyebrow" style={{ display: 'block' }}>COMPARING REFLECTION SESSIONS</span>
+                        <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-main, #254148)' }}>
+                          Version {comparisonData.current_version} ({comparisonData.current_completed_at ? new Date(comparisonData.current_completed_at).toLocaleDateString() : 'Current'})
+                          {' '}vs.{' '}
+                          Version {comparisonData.previous_version} ({comparisonData.previous_completed_at ? new Date(comparisonData.previous_completed_at).toLocaleDateString() : 'Previous'})
+                        </span>
+                      </div>
+                      {comparisonData.available_versions && comparisonData.available_versions.length > 2 && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span style={{ fontSize: '12px', color: 'var(--text-subtle, #53727a)' }}>Compare against:</span>
+                          <select
+                            value={comparePrevId}
+                            onChange={(e) => {
+                              setComparePrevId(e.target.value)
+                              void loadComparison(e.target.value)
+                            }}
+                            style={{ padding: '6px 10px', borderRadius: '6px', fontSize: '12px', border: '1px solid var(--border-subtle, #e2eae8)', background: 'var(--surface, #ffffff)', color: 'var(--text-main, #254148)' }}
+                          >
+                            {comparisonData.available_versions
+                              .filter((v: any) => v.session_id !== comparisonData.current_session_id)
+                              .map((v: any) => (
+                                <option key={v.session_id} value={v.session_id}>
+                                  Version {v.version} · {v.completed_at ? new Date(v.completed_at).toLocaleDateString() : 'Previous'}
+                                </option>
+                              ))}
+                          </select>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Executive Summary Card */}
+                    <div className="comparison-header-card">
+                      <span className="eyebrow" style={{ color: 'var(--teal, #538a84)' }}>MONTHLY WELLNESS TRAJECTORY</span>
+                      <h3>Reflection & Growth Synthesis</h3>
+                      <p>{comparisonData.comparison?.executive_summary || 'A side-by-side comparative analysis of your monthly wellness check-ins, honoring shifts in coping, stressors, and emotional resilience.'}</p>
+                    </div>
+
+                    {/* 6 Dimension Cards */}
+                    {comparisonData.comparison?.dimensions && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                        {[
+                          { key: 'emotional_wellbeing', icon: <Heart size={16} />, defaultTitle: 'Emotional Well-being' },
+                          { key: 'stressors_and_triggers', icon: <ShieldAlert size={16} />, defaultTitle: 'Stressors & Daily Demands' },
+                          { key: 'coping_strategies', icon: <Sparkles size={16} />, defaultTitle: 'Coping Strategies & Practices' },
+                          { key: 'support_system', icon: <Users size={16} />, defaultTitle: 'Support System & Relationships' },
+                          { key: 'personal_strengths', icon: <Sun size={16} />, defaultTitle: 'Personal Strengths & Resilience' },
+                          { key: 'recurring_themes', icon: <Bookmark size={16} />, defaultTitle: 'Recurring Themes & Reflections' },
+                        ].map(({ key, icon, defaultTitle }) => {
+                          const dim = comparisonData.comparison.dimensions[key]
+                          if (!dim) return null
+                          const tagClass = dim.status_tag === 'deepened' || dim.status_tag === 'lighter' || dim.status_tag === 'improving'
+                            ? 'comparison-badge-lighter'
+                            : dim.status_tag === 'challenging' || dim.status_tag === 'needs_nurturing'
+                            ? 'comparison-badge-challenging'
+                            : 'comparison-badge-evolving'
+                          return (
+                            <div className="comparison-dimension-card" key={key}>
+                              <div className="comparison-dimension-header">
+                                <h4>{icon} {dim.title || defaultTitle}</h4>
+                                {dim.status_tag && (
+                                  <span className={`comparison-badge ${tagClass}`}>
+                                    {dim.status_tag.replace(/_/g, ' ')}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="comparison-duo">
+                                <div className="comparison-side">
+                                  <span className="comparison-side-label">Previous Check-in</span>
+                                  <p className="comparison-side-text">{dim.previous_state || 'Baseline observation recorded.'}</p>
+                                </div>
+                                <div className="comparison-side">
+                                  <span className="comparison-side-label">Current Check-in</span>
+                                  <p className="comparison-side-text">{dim.current_state || 'Current state captured.'}</p>
+                                </div>
+                              </div>
+                              {dim.shift_description && (
+                                <div className="comparison-insights-box">
+                                  <b>Observed Shift:</b> {dim.shift_description}
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+
+                    {/* Overall Progress Narrative */}
+                    {comparisonData.comparison?.overall_progress_narrative && (
+                      <div className="comparison-dimension-card" style={{ marginTop: '4px' }}>
+                        <div className="comparison-dimension-header">
+                          <h4><Compass size={16} /> Your Ongoing Wellness Narrative</h4>
+                          <span className="soft-pill" style={{ fontSize: '11px' }}>Non-Diagnostic</span>
+                        </div>
+                        <p style={{ margin: 0, fontSize: '13px', lineHeight: 1.7, color: 'var(--text-main, #254148)' }}>
+                          {comparisonData.comparison.overall_progress_narrative}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </section>
         ) : (
           <section className="question-card">
@@ -2201,13 +3331,15 @@ function MindLog() {
 
 function Insights() {
   const [entries, setEntries] = useState<Array<{ entry: MindLogEntry; analysis: EmotionAnalysis | null }>>([])
+  const [comprehensive, setComprehensive] = useState<ComprehensiveInsights | null>(null)
+  const [chatStats, setChatStats] = useState<{ total_conversations: number; total_user_messages: number } | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
   useEffect(() => {
     let active = true
-    services.listMindLogs()
-      .then(async (logs) => {
+    Promise.allSettled([
+      services.listMindLogs().then(async (logs) => {
         const results = await Promise.all(
           logs.map(async (entry) => {
             try {
@@ -2218,7 +3350,14 @@ function Insights() {
           }),
         )
         if (active) setEntries(results)
-      })
+      }),
+      services.getComprehensiveInsights().then((comp) => {
+        if (active) setComprehensive(comp)
+      }),
+      services.getChatStats().then((stats) => {
+        if (active) setChatStats(stats)
+      }),
+    ])
       .catch((cause) => {
         if (active) setError(cause instanceof Error ? cause.message : 'Your insights could not be loaded.')
       })
@@ -2234,13 +3373,68 @@ function Insights() {
   const latest = [...analyzed].sort(
     (a, b) => new Date(b.entry.updated_at || b.entry.date || b.entry.created_at).getTime() - new Date(a.entry.updated_at || a.entry.date || a.entry.created_at).getTime(),
   )[0]
-  const distribution = latest?.analysis.distribution
-    ? Object.entries(latest.analysis.distribution).filter(([, value]) => typeof value === 'number' && Number.isFinite(value) && value >= 0)
-    : []
-  const colors = ['var(--chart-1)', 'var(--chart-2)', 'var(--chart-3)', 'var(--chart-4)', 'var(--chart-5)']
-  const chartData = distribution.map(([label, value], index) => ({ key: `emotion${index}`, label, value, fill: `var(--color-emotion${index})` }))
-  const chartConfig: ChartConfig = Object.fromEntries(chartData.map((item, index) => [item.key, { label: item.label, color: colors[index % colors.length] }]))
-  const analyzedAt = latest?.analysis.analyzedAt ? new Date(latest.analysis.analyzedAt) : null
+
+  const EMOTION_COLORS: Record<string, string> = {
+    joy: '#F59E0B',      // gold
+    sadness: '#3B82F6',  // blue
+    anger: '#EF4444',    // bright coral/red (visible in dark mode)
+    fear: '#F97316',     // orange
+    love: '#EC4899',     // pink
+    surprise: '#8B5CF6', // purple
+    neutral: '#64748B',  // slate grey
+    peace: '#10B981',    // green
+    hope: '#14B8A6',     // teal
+  }
+
+  const getEmotionColor = (emotion: string): string => {
+    const k = (emotion || '').toLowerCase().trim()
+    return EMOTION_COLORS[k] || '#538a84'
+  }
+
+  const rawDist = comprehensive?.emotion_distribution
+    ? Object.entries(comprehensive.emotion_distribution).filter(([, value]) => typeof value === 'number' && Number.isFinite(value) && value > 0)
+    : (latest?.analysis.distribution
+        ? Object.entries(latest.analysis.distribution).filter(([, value]) => typeof value === 'number' && Number.isFinite(value) && value >= 0)
+        : [])
+
+  const totalDistValue = rawDist.reduce((acc, [, val]) => acc + val, 0) || 1
+  const chartData = rawDist.map(([label, value], index) => {
+    const emotionKey = label.toLowerCase().trim()
+    const fill = getEmotionColor(emotionKey)
+    const pct = Math.round((value / totalDistValue) * 100)
+    return {
+      key: `emotion_${emotionKey}_${index}`,
+      label: label.charAt(0).toUpperCase() + label.slice(1),
+      value: Math.round(value * 100) / 100,
+      percentage: pct,
+      fill,
+    }
+  })
+  const chartConfig: ChartConfig = Object.fromEntries(
+    chartData.map((item) => [item.key, { label: `${item.label} (${item.percentage}%)`, color: item.fill }])
+  )
+  const analyzedAt = comprehensive?.generated_at
+    ? new Date(comprehensive.generated_at)
+    : (latest?.analysis.analyzedAt ? new Date(latest.analysis.analyzedAt) : null)
+
+  const sections = comprehensive?.sections as any
+  const structuredList = [
+    { title: 'Overall Emotional Patterns', data: sections?.emotional_overview || sections?.overall_patterns, icon: Waves },
+    { title: 'Recent Mood Trends', data: sections?.mood_trends, icon: Activity },
+    { title: 'Recurring Themes', data: sections?.recurring_themes, icon: Sparkles },
+    { title: 'Possible Stressors', data: sections?.stressors, icon: CircleHelp },
+    { title: 'Positive Patterns & Strengths', data: sections?.positive_patterns || sections?.strengths, icon: Heart },
+    { title: 'Patterns Across Conversations', data: sections?.conversation_patterns, icon: MessageCircle },
+    { title: 'MindLog Observations', data: sections?.mindlog_observations, icon: BookHeart },
+    { title: 'Personal Context from Guided Intake', data: sections?.intake_context, icon: Sun },
+    { title: 'Personal Strengths & Resilience', data: sections?.strengths, icon: ShieldCheck },
+    { title: 'Progress Over Time', data: sections?.progress_over_time, icon: Clock3 },
+  ].filter((item) => Boolean(item.data?.observed_data || item.data?.interpretation))
+
+  const mindlogCount = comprehensive?.data_counts?.mindlog_count ?? entries.length
+  const totalConversations = chatStats?.total_conversations ?? (comprehensive?.data_counts as any)?.conversation_count ?? (comprehensive?.data_counts as any)?.unique_conversations_count ?? 0
+  const totalUserMessages = chatStats?.total_user_messages ?? (comprehensive?.data_counts as any)?.chat_messages_count ?? (comprehensive?.data_counts as any)?.total_user_messages_count ?? 0
+  const intakeCount = (comprehensive?.data_counts as any)?.completed_intake_assessments ?? (comprehensive?.data_counts as any)?.intake_assessments_count ?? comprehensive?.data_counts?.intake_answers_count ?? 0
 
   return (
     <DashboardShell title="Mood insights" subtitle="Gentle reflections on your emotional patterns." active="/dashboard/insights">
@@ -2249,7 +3443,7 @@ function Insights() {
           <div>
             <span className="eyebrow">NOTICE, WITHOUT JUDGMENT</span>
             <h2>Your inner weather,<br /><em>over time.</em></h2>
-            <p>Your emotional patterns are personal. These insights are here to help you reflect, not to diagnose.</p>
+            <p>Your emotional patterns are personal. These insights synthesize your journals, companion conversations, and guided reflections to help you notice and care for yourself.</p>
           </div>
           <div className="insight-cloud">
             <Sun size={38} />
@@ -2259,28 +3453,28 @@ function Insights() {
         </div>
 
         {error && <p className="auth-error" role="alert">{error}</p>}
-        {loading && <p role="status">Loading your MindLog analysis…</p>}
+        {loading && <p role="status">Loading your comprehensive reflections…</p>}
 
         <div className="insight-stats">
           <article>
-            <span>ANALYZED ENTRIES</span>
-            <b>{loading ? '…' : analyzed.length}</b>
-            <small>{analyzed.length ? 'Entries with available analysis' : 'Analysis will appear when available'}</small>
+            <span>MINDLOG ENTRIES</span>
+            <b>{loading ? '…' : mindlogCount}</b>
+            <small>{entries.length ? 'Saved journal reflections' : 'Journals recorded'}</small>
           </article>
           <article>
-            <span>RECENT EMOTION</span>
-            <b>{latest?.analysis.primaryEmotion ?? '—'}</b>
-            <small>From your most recent analyzed entry</small>
+            <span>CONVERSATIONS</span>
+            <b>{loading ? '…' : totalConversations}</b>
+            <small>Authoritative sessions</small>
           </article>
           <article>
-            <span>RECENT TREND</span>
-            <b>—</b>
-            <small>Trend data is not available from the service yet</small>
+            <span>USER MESSAGES</span>
+            <b>{loading ? '…' : totalUserMessages}</b>
+            <small>Total messages sent</small>
           </article>
           <article>
-            <span>LAST ANALYSIS</span>
-            <b>{analyzedAt && !Number.isNaN(analyzedAt.getTime()) ? analyzedAt.toLocaleDateString() : '—'}</b>
-            <small>{analyzedAt ? 'Provided with your latest analysis' : 'Analysis date unavailable'}</small>
+            <span>PRIMARY EMOTION</span>
+            <b>{comprehensive?.primary_emotion ?? latest?.analysis.primaryEmotion ?? '—'}</b>
+            <small>Across recent reflections</small>
           </article>
         </div>
 
@@ -2298,7 +3492,23 @@ function Insights() {
                       <Cell key={item.key} fill={item.fill} />
                     ))}
                   </Pie>
-                  <ChartTooltip content={<ChartTooltipContent nameKey="label" />} />
+                  <ChartTooltip
+                    content={({ active, payload }) => {
+                      if (!active || !payload?.length) return null
+                      const d = payload[0].payload
+                      return (
+                        <div className="surface-card" style={{ padding: '8px 12px', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: d.fill }} />
+                            <b style={{ fontSize: '12px' }}>{d.label}</b>
+                          </div>
+                          <p style={{ margin: '4px 0 0', fontSize: '11px', color: 'var(--text-subtle, #53727a)' }}>
+                            Weight: {d.value} ({d.percentage}%)
+                          </p>
+                        </div>
+                      )
+                    }}
+                  />
                   <ChartLegend content={<ChartLegendContent nameKey="key" />} />
                 </PieChart>
               </ChartContainer>
@@ -2306,88 +3516,235 @@ function Insights() {
               <div className="chart-empty">
                 <div className="chart-rings"><i /><i /><i /><span><Waves size={20} /></span></div>
                 <b>{loading ? 'Gathering your analysis.' : 'Your landscape will take shape over time.'}</b>
-                <p>{latest ? 'Emotion distribution is not available for this entry.' : 'Once an entry has an analysis, its backend-provided distribution will appear here.'}</p>
+                <p>As you write in MindLog or chat with SunnoBuddy, your emotional landscape will bloom here.</p>
               </div>
             )}
           </article>
 
           <article className="surface-card trend-card">
-            <div>
-              <span className="eyebrow">LITTLE BY LITTLE</span>
-              <h3>Your recent rhythm</h3>
+            <div className="card-title-row">
+              <div>
+                <span className="eyebrow">MULTI-SOURCE SYNTHESIS</span>
+                <h3>Synthesis status</h3>
+              </div>
+              <span className="soft-pill">
+                <Activity size={12} /> {comprehensive?.data_sufficiency === 'sufficient' ? 'Sufficient data' : comprehensive?.data_sufficiency === 'minimal' ? 'Minimal data' : 'Fresh start'}
+              </span>
             </div>
-            <div className="trend-unavailable">
-              <Waves size={22} />
-              <b>No trend series available yet</b>
-              <p>Trend scores are displayed only when the backend provides them.</p>
+            <div style={{ marginTop: '14px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <div style={{ fontSize: '12px', color: '#53727a', lineHeight: 1.6 }}>
+                SunnoBuddy aggregates your <b>MindLog entries</b>, user messages from <b>Companion conversations</b>, and <b>Guided Intake</b> responses to provide holistic reflections without clinical judgment.
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', marginTop: '6px' }}>
+                <div className="synthesis-metric-box">
+                  <span style={{ fontSize: '10px', display: 'block' }}>MindLogs</span>
+                  <b style={{ fontSize: '16px' }}>{mindlogCount}</b>
+                </div>
+                <div className="synthesis-metric-box">
+                  <span style={{ fontSize: '10px', display: 'block' }}>Conversations</span>
+                  <b style={{ fontSize: '16px' }}>{totalConversations}</b>
+                </div>
+                <div className="synthesis-metric-box">
+                  <span style={{ fontSize: '10px', display: 'block' }}>Intake</span>
+                  <b style={{ fontSize: '16px' }}>{intakeCount}</b>
+                </div>
+              </div>
             </div>
           </article>
         </div>
 
-        {analyzed.length > 0 && (
-          <section className="insight-entry-list">
-            <h3>Recent entry analyses</h3>
-            {analyzed.map(({ entry, analysis }) => (
-              <article className="insight-entry" key={entry.id}>
-                <div>
-                  <b>{entry.title}</b>
-                  <small>{new Date(entry.created_at).toLocaleDateString()}</small>
-                </div>
-                <span>{analysis.primaryEmotion}{typeof analysis.confidence === 'number' ? ` · ${Math.round(analysis.confidence * 100)}% confidence` : ''}</span>
-                <Link href={`/dashboard/mindlog/${encodeURIComponent(entry.id)}`} aria-label={`Open ${entry.title}`}><ArrowRight size={16} /></Link>
-              </article>
-            ))}
+        {/* Structured Multi-Source Sections */}
+        {structuredList.length > 0 && (
+          <section style={{ marginTop: '28px' }}>
+            <div style={{ marginBottom: '16px' }}>
+              <span className="eyebrow">COMPREHENSIVE REFLECTIONS</span>
+              <h3 style={{ font: '500 20px var(--serif)', margin: '4px 0 0' }}>Synthesized insights across your space</h3>
+              <p style={{ fontSize: '12px', color: '#677e84', margin: '4px 0 0' }}>
+                Facts observed from your journals, chats, and intake are gently distinguished from AI reflections.
+              </p>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '16px' }}>
+              {structuredList.map((item) => (
+                <article key={item.title} className="surface-card" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <item.icon size={16} style={{ color: '#538a84' }} />
+                      <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 600 }}>{item.title}</h4>
+                    </div>
+                  </div>
+
+                  {item.data?.observed_data && (
+                    <div className="observed-data-card">
+                      <span style={{ fontSize: '9px', fontWeight: 600, letterSpacing: '0.8px', color: '#538a84', textTransform: 'uppercase' }}>
+                        Observed Data
+                      </span>
+                      <p style={{ margin: '4px 0 0', fontSize: '12px', lineHeight: 1.5 }}>
+                        {item.data.observed_data}
+                      </p>
+                    </div>
+                  )}
+
+                  {item.data?.interpretation && (
+                    <div className="ai-reflection-card">
+                      <span style={{ fontSize: '9px', fontWeight: 600, letterSpacing: '0.8px', color: '#c29864', textTransform: 'uppercase' }}>
+                        AI Reflection
+                      </span>
+                      <p style={{ margin: '4px 0 0', fontSize: '12px', lineHeight: 1.5 }}>
+                        {item.data.interpretation}
+                      </p>
+                    </div>
+                  )}
+                </article>
+              ))}
+            </div>
           </section>
         )}
 
-        <Link href="/dashboard/mindlog" className="button button-primary">
-          <BookHeart size={16} /> Open MindLog Calendar <ArrowRight size={15} />
-        </Link>
+        {/* Suggestions for Self-Care */}
+        {sections?.self_care_suggestions && sections.self_care_suggestions.length > 0 && (
+          <section className="surface-card self-care-container" style={{ marginTop: '24px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+              <Sparkles size={18} style={{ color: '#538a84' }} />
+              <div>
+                <span className="eyebrow" style={{ color: '#538a84' }}>GENTLE NOURISHMENT</span>
+                <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>Suggestions for self-care</h3>
+              </div>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {sections.self_care_suggestions.map((suggestion: string, idx: number) => (
+                <div key={idx} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', fontSize: '13px' }}>
+                  <span style={{ color: '#538a84', fontWeight: 'bold' }}>•</span>
+                  <span>{suggestion}</span>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {analyzed.length > 0 && (
+          <section className="insight-entry-list" style={{ marginTop: '24px' }}>
+            <h3>Recent entry analyses</h3>
+            {analyzed.map(({ entry, analysis }) => {
+              const emotionColor = getEmotionColor(analysis.primaryEmotion)
+              const displayTitle = entry.title?.trim() || 'Untitled Reflection'
+              const dateStr = new Date(entry.date || entry.created_at).toLocaleDateString()
+              return (
+                <article className="insight-entry" key={entry.id}>
+                  <div>
+                    <b>{displayTitle}</b>
+                    <small>{dateStr}</small>
+                  </div>
+                  <span
+                    className="emotion-badge-pill"
+                    style={{
+                      backgroundColor: `${emotionColor}18`,
+                      color: emotionColor,
+                      border: `1px solid ${emotionColor}40`,
+                    }}
+                  >
+                    <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: emotionColor }} />
+                    {analysis.primaryEmotion}
+                    {typeof analysis.confidence === 'number' ? ` · ${Math.round(analysis.confidence * 100)}%` : ''}
+                  </span>
+                  <Link href={`/dashboard/mindlog/${encodeURIComponent(entry.id)}`} aria-label={`Open ${displayTitle}`}>
+                    <ArrowRight size={16} />
+                  </Link>
+                </article>
+              )
+            })}
+          </section>
+        )}
+
+        <div style={{ marginTop: '24px' }}>
+          <Link href="/dashboard/mindlog" className="button button-primary">
+            <BookHeart size={16} /> Open MindLog Calendar <ArrowRight size={15} />
+          </Link>
+        </div>
       </div>
     </DashboardShell>
   )
 }
 
 function Reports() {
-  const [range, setRange] = useState('Last 30 days')
-  const [generated, setGenerated] = useState(false)
+  const [period, setPeriod] = useState('30d')
+  const [customStart, setCustomStart] = useState(() => {
+    const d = new Date()
+    d.setDate(d.getDate() - 30)
+    return d.toISOString().slice(0, 10)
+  })
+  const [customEnd, setCustomEnd] = useState(() => new Date().toISOString().slice(0, 10))
+  const [sources, setSources] = useState<string[]>(['mindlog', 'companion', 'intake', 'emotions'])
   const [generating, setGenerating] = useState(false)
   const [reportError, setReportError] = useState('')
+  const [generatedSuccess, setGeneratedSuccess] = useState(false)
+  const [pastReports, setPastReports] = useState<Array<any>>([])
+  const [loadingHistory, setLoadingHistory] = useState(true)
+
+  const refreshHistory = async () => {
+    try {
+      setLoadingHistory(true)
+      const list = await services.listReports()
+      setPastReports(list || [])
+    } catch (err) {
+      console.warn('Could not list reports:', err)
+    } finally {
+      setLoadingHistory(false)
+    }
+  }
+
+  useEffect(() => {
+    void refreshHistory()
+  }, [])
+
+  const toggleSource = (sourceKey: string) => {
+    setSources((prev) =>
+      prev.includes(sourceKey) ? prev.filter((s) => s !== sourceKey) : [...prev, sourceKey]
+    )
+  }
+
+  const handleDownload = async (reportId: string) => {
+    try {
+      const blob = await services.downloadReport(reportId)
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `sunnobuddy-wellness-report-${reportId}.pdf`
+      a.click()
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+    } catch (err) {
+      setReportError('Could not download the requested report.')
+    }
+  }
+
+  const handleDelete = async (reportId: string) => {
+    try {
+      await services.deleteReport(reportId)
+      setPastReports((prev) => prev.filter((r) => r.report_id !== reportId))
+    } catch (err) {
+      console.warn('Failed to delete report:', err)
+    }
+  }
 
   const generateReport = async () => {
-    const days = Number.parseInt(range.match(/\d+/)?.[0] ?? '30', 10)
-    const end = new Date()
-    const start = new Date(end)
-    start.setDate(start.getDate() - days + 1)
     setGenerating(true)
     setReportError('')
-    setGenerated(false)
+    setGeneratedSuccess(false)
     try {
-      const report = await services.createMindLogReport(start.toISOString().slice(0, 10), end.toISOString().slice(0, 10))
-      const anchor = document.createElement('a')
-      if (report instanceof Blob) {
-        const url = URL.createObjectURL(report)
-        anchor.href = url
-        anchor.download = 'mindlog-report.pdf'
-        window.setTimeout(() => URL.revokeObjectURL(url), 1000)
-      } else if (report.success && report.pdf_base64) {
-        const binary = window.atob(report.pdf_base64)
-        const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0))
-        const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }))
-        anchor.href = url
-        anchor.download = 'mindlog-report.pdf'
-        window.setTimeout(() => URL.revokeObjectURL(url), 1000)
-      } else if (report.success && report.pdf_url) {
-        const url = new URL(report.pdf_url, window.location.origin)
-        if (url.protocol !== 'https:' && url.origin !== window.location.origin) throw new Error('The report link is not secure.')
-        anchor.href = url.toString()
-        anchor.target = '_blank'
-        anchor.rel = 'noopener noreferrer'
+      const res = await services.generateWellnessReport({
+        period,
+        start_date: period === 'custom' ? customStart : undefined,
+        end_date: period === 'custom' ? customEnd : undefined,
+        sources,
+      })
+      const reportId = res?.report_id || res?.reportId
+      if (reportId) {
+        await handleDownload(reportId)
+        setGeneratedSuccess(true)
+        void refreshHistory()
       } else {
-        throw new Error('The server did not return a downloadable PDF report.')
+        throw new Error('Server generated report without returning report ID.')
       }
-      anchor.click()
-      setGenerated(true)
     } catch (cause) {
       setReportError(cause instanceof Error ? cause.message : 'The report could not be generated. Please try again.')
     } finally {
@@ -2396,50 +3753,191 @@ function Reports() {
   }
 
   return (
-    <DashboardShell title="Your reports" subtitle="A thoughtful look back at your MindLog." active="/dashboard/reports">
+    <DashboardShell title="Your reports" subtitle="A multi-source look back at your wellness journey." active="/dashboard/reports">
       <div className="reports-wrap">
         <div className="reports-intro">
-          <span className="eyebrow">REFLECTION, GATHERED GENTLY</span>
-          <h2>Your Wellness<br /><em>Reports.</em></h2>
-          <p>Bring your MindLog reflections together in one calm, easy-to-read report.</p>
+          <span className="eyebrow">MULTI-SOURCE SYNTHESIS</span>
+          <h2>Comprehensive<br /><em>Wellness Reports.</em></h2>
+          <p>
+            Synthesize your MindLog journals, Companion conversations, Guided Intake assessments, and emotion patterns into a private, beautifully formatted multi-page PDF.
+          </p>
         </div>
+
         <section className="report-card">
           <div className="report-card-art">
             <div className="report-sun"><Sun size={31} /></div>
             <Waves size={62} />
-            <span>mindlog<br />reflection</span>
+            <span>comprehensive<br />reflection</span>
           </div>
+
           <div className="report-details">
-            <span className="eyebrow">YOUR PERSONAL SUMMARY</span>
-            <h3>MindLog report</h3>
-            <p>A private overview of your journal entries and the emotions shared over time.</p>
-            <label htmlFor="date-range">Choose a time period</label>
-            <div className="select-wrap">
-              <select id="date-range" value={range} onChange={(e) => { setRange(e.target.value); setGenerated(false) }}>
-                {['Last 7 days', 'Last 14 days', 'Last 30 days', 'Last 60 days', 'Last 90 days'].map((r) => (
-                  <option key={r}>{r}</option>
-                ))}
+            <span className="eyebrow">CONFIGURE REPORT</span>
+            <h3>Wellness Summary Report</h3>
+            <p>Analyze your progress across days, weeks, or custom dates with 22 structured wellness sections.</p>
+
+            {/* Time Period Selector */}
+            <label htmlFor="report-period" style={{ display: 'block', marginTop: '12px', fontWeight: 600, fontSize: '12px' }}>
+              Select Time Period
+            </label>
+            <div className="select-wrap" style={{ marginTop: '4px' }}>
+              <select
+                id="report-period"
+                value={period}
+                onChange={(e) => {
+                  setPeriod(e.target.value)
+                  setGeneratedSuccess(false)
+                }}
+              >
+                <option value="7d">Last 7 days</option>
+                <option value="30d">Last 30 days</option>
+                <option value="90d">Last 90 days</option>
+                <option value="all">All time (full journey)</option>
+                <option value="custom">Custom date range…</option>
               </select>
               <ChevronDown size={15} />
             </div>
-            {reportError && <p className="auth-error" role="alert">{reportError}</p>}
-            {generated ? (
-              <div className="report-empty-message" role="status">
+
+            {/* Custom Date Pickers */}
+            {period === 'custom' && (
+              <div style={{ display: 'flex', gap: '12px', marginTop: '10px' }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{ fontSize: '11px', color: '#83979c', display: 'block' }}>Start Date</label>
+                  <input
+                    type="date"
+                    value={customStart}
+                    onChange={(e) => setCustomStart(e.target.value)}
+                    style={{ width: '100%', padding: '6px 8px', borderRadius: '6px', border: '1px solid #c8d6d5', fontSize: '12px' }}
+                  />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={{ fontSize: '11px', color: '#83979c', display: 'block' }}>End Date</label>
+                  <input
+                    type="date"
+                    value={customEnd}
+                    onChange={(e) => setCustomEnd(e.target.value)}
+                    style={{ width: '100%', padding: '6px 8px', borderRadius: '6px', border: '1px solid #c8d6d5', fontSize: '12px' }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Source Selection Checkboxes */}
+            <label style={{ display: 'block', marginTop: '16px', fontWeight: 600, fontSize: '12px' }}>
+              Data Sources to Include
+            </label>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', marginTop: '6px' }}>
+              {[
+                { id: 'mindlog', label: 'MindLog Journals' },
+                { id: 'companion', label: 'Companion Chats' },
+                { id: 'intake', label: 'Guided Intake' },
+                { id: 'emotions', label: 'Emotion Trends' },
+              ].map((s) => (
+                <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={sources.includes(s.id)}
+                    onChange={() => toggleSource(s.id)}
+                  />
+                  <span>{s.label}</span>
+                </label>
+              ))}
+            </div>
+
+            {reportError && <p className="auth-error" role="alert" style={{ marginTop: '12px' }}>{reportError}</p>}
+
+            {generatedSuccess ? (
+              <div className="report-empty-message" role="status" style={{ marginTop: '16px' }}>
                 <Check size={16} />
-                <span>Your PDF report has been downloaded.</span>
+                <span>Your multi-page PDF report was downloaded successfully.</span>
               </div>
             ) : (
-              <button className="button button-primary generate-button" disabled={generating} onClick={() => void generateReport()}>
-                {generating ? 'Preparing report…' : 'Generate report'} <ArrowRight size={16} />
+              <button
+                className="button button-primary generate-button"
+                disabled={generating || sources.length === 0}
+                onClick={() => void generateReport()}
+                style={{ marginTop: '18px' }}
+              >
+                {generating ? 'Synthesizing wellness report…' : 'Generate & Download PDF'} <ArrowRight size={16} />
               </button>
             )}
           </div>
         </section>
-        <div className="report-privacy">
+
+        {/* Report History */}
+        <section className="surface-card" style={{ marginTop: '24px', padding: '20px 24px', borderRadius: '12px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+            <div>
+              <span className="eyebrow">REPORT ARCHIVE</span>
+              <h3 style={{ margin: 0, fontSize: '16px' }}>Past Wellness Reports</h3>
+            </div>
+            <span style={{ fontSize: '11px', color: '#83979c' }}>{pastReports.length} generated</span>
+          </div>
+
+          {loadingHistory ? (
+            <p style={{ fontSize: '12px', color: '#83979c' }}>Loading your report history…</p>
+          ) : pastReports.length === 0 ? (
+            <p style={{ fontSize: '12px', color: '#83979c', margin: 0 }}>
+              No reports generated yet. Click above to generate your first multi-source PDF report.
+            </p>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {pastReports.map((r) => (
+                <div
+                  key={r.report_id}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '10px 14px',
+                    borderRadius: '8px',
+                    background: '#f9fcfb',
+                    border: '1px solid #e5eded',
+                    fontSize: '12px',
+                    flexWrap: 'wrap',
+                    gap: '8px',
+                  }}
+                >
+                  <div>
+                    <b style={{ color: '#254148', display: 'block' }}>
+                      Report · {r.period ? r.period.toUpperCase() : 'Wellness Period'}
+                    </b>
+                    <span style={{ fontSize: '11px', color: '#83979c' }}>
+                      Created: {r.created_at ? new Date(r.created_at).toLocaleString() : 'Recent'}
+                      {r.start_date && r.end_date ? ` (${r.start_date} to ${r.end_date})` : ''}
+                    </span>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <button
+                      type="button"
+                      className="button button-outline"
+                      onClick={() => void handleDownload(r.report_id)}
+                      style={{ fontSize: '11px', padding: '4px 10px', height: 'auto', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                    >
+                      <Download size={12} />
+                      <span>Download PDF</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void handleDelete(r.report_id)}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#a4b2b6', padding: '4px' }}
+                      title="Delete report"
+                      aria-label="Delete report"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <div className="report-privacy" style={{ marginTop: '20px' }}>
           <ShieldCheck size={17} />
           <span>
-            <b>Made for you, and only you.</b>
-            <small>Your personal report is private and is never shared without your permission.</small>
+            <b>Private & confidential by design.</b>
+            <small>Your generated reports and journal data stay strictly in your personal account.</small>
           </span>
         </div>
       </div>
@@ -2449,67 +3947,123 @@ function Reports() {
 
 function TherapistLocator() {
   const [locationQuery, setLocationQuery] = useState('')
-  const [activeQuery, setActiveQuery] = useState('New Delhi')
+  const [activeQuery, setActiveQuery] = useState('')
+  const [hasSearched, setHasSearched] = useState(false)
   const [locationStatus, setLocationStatus] = useState('')
+  const [therapistsData, setTherapistsData] = useState<any>(null)
+  const [loading, setLoading] = useState(false)
+  const [searchRadius, setSearchRadius] = useState<number>(15)
 
-  const nearbyClinics = [
-    {
-      name: 'Lotus Wellness & Mind Care Collective',
-      specialty: 'Anxiety, Stress, Mindfulness & CBT',
-      rating: '4.9 ★ (120+ verified reviews)',
-      distance: '1.2 km away',
-      address: 'Suite 201, Green Park Market Road',
-      phone: '+91 98101 22334',
-      badge: 'Verified Practice',
-    },
-    {
-      name: 'SafeHarbor Counseling Center',
-      specialty: 'Individual Counseling, Depression & Relationships',
-      rating: '4.8 ★ (95 reviews)',
-      distance: '2.5 km away',
-      address: 'Near Metro Gate 3, Ring Road Plaza',
-      phone: '+91 98112 33445',
-      badge: 'Online & In-person',
-    },
-    {
-      name: 'Aura Holistic Psychological Services',
-      specialty: 'Trauma-informed Therapy & Young Adult Care',
-      rating: '4.9 ★ (140 reviews)',
-      distance: '3.8 km away',
-      address: 'Building 4B, Community Center',
-      phone: '+91 98733 55667',
-      badge: 'Sliding Scale Available',
-    },
-  ]
+  const quickCities = ['Kolkata', 'Delhi NCR', 'Mumbai', 'Bengaluru', 'Pune', 'Hyderabad', '712248']
+
+  const performSearch = async (params: { lat?: number; lon?: number; query?: string; radius_km?: number }) => {
+    setLoading(true)
+    setHasSearched(true)
+    const effRadius = params.radius_km || searchRadius || 15
+    try {
+      const res = await services.searchTherapists({ ...params, radius_km: effRadius })
+      const normalizedClinics = res?.therapists || res?.providers || []
+      const actualRadius = res?.radius_km || effRadius
+      setSearchRadius(actualRadius)
+      setTherapistsData({ ...res, therapists: normalizedClinics })
+      const locName = res?.location || params.query || (params.lat ? `${params.lat.toFixed(2)}, ${params.lon?.toFixed(2)}` : 'your location')
+      setActiveQuery(locName)
+      if (normalizedClinics.length > 0) {
+        setLocationStatus(`Found ${normalizedClinics.length} verified mental health clinics and providers within ${actualRadius} km of ${locName}.`)
+      } else {
+        setLocationStatus(`No local OpenStreetMap clinic nodes found within ${actualRadius} km of ${locName}. You can expand your search to 25 km or search on Google Maps.`)
+      }
+    } catch (err) {
+      console.warn('Therapist search error:', err)
+      setLocationStatus('Could not complete search right now. Showing verified national directories.')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const useCurrentLocation = () => {
     if (!navigator.geolocation) {
-      setLocationStatus('Location access is not available in this browser. Enter a city or area above.')
+      setLocationStatus('Location access is not available in this browser. You can enter any city or PIN code above.')
       return
     }
-    setLocationStatus('Accessing your current location…')
+    setLocationStatus('Accessing your current location coordinates…')
     navigator.geolocation.getCurrentPosition(
-      ({ coords }) => {
-        const coordsStr = `${coords.latitude.toFixed(4)},${coords.longitude.toFixed(4)}`
-        setActiveQuery(coordsStr)
-        setLocationQuery('')
-        setLocationStatus(`Showing therapists and centers near your coordinates (${coordsStr}).`)
+      (pos) => {
+        const lat = pos.coords.latitude
+        const lon = pos.coords.longitude
+        void performSearch({ lat, lon, radius_km: searchRadius })
       },
-      () => {
-        setLocationStatus('Could not read location. You can enter any city or locality.')
+      (err) => {
+        if (err.code === err.TIMEOUT) {
+          navigator.geolocation.getCurrentPosition(
+            (pos) => {
+              void performSearch({ lat: pos.coords.latitude, lon: pos.coords.longitude, radius_km: searchRadius })
+            },
+            () => {
+              setLocationStatus('Location request timed out. Please enter your city or PIN code above.')
+            },
+            { enableHighAccuracy: false, timeout: 15000, maximumAge: 600000 }
+          )
+          return
+        }
+        if (err.code === err.PERMISSION_DENIED) {
+          setLocationStatus('Location permission was denied. You can select any city chip below or search by PIN code.')
+        } else {
+          setLocationStatus('Could not read location coordinates. Please search by city or PIN code above.')
+        }
       },
-      { timeout: 10000, maximumAge: 300000 }
+      { timeout: 10000, enableHighAccuracy: true }
     )
   }
 
   const handleSearch = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    const place = locationQuery.trim() || 'therapists near me'
+    const place = locationQuery.trim()
+    if (!place) return
     setActiveQuery(place)
-    setLocationStatus(`Displaying therapists and mental health practices near "${place}".`)
+    void performSearch({ query: place, radius_km: searchRadius })
   }
 
-  const mapEmbedUrl = `https://maps.google.com/maps?q=therapists+mental+health+near+${encodeURIComponent(activeQuery)}&t=&z=13&ie=UTF8&iwloc=&output=embed`
+  const handleQuickSearch = (place: string) => {
+    setLocationQuery(place)
+    setActiveQuery(place)
+    void performSearch({ query: place, radius_km: searchRadius })
+  }
+
+  const mapEmbedUrl = activeQuery
+    ? `https://maps.google.com/maps?q=therapists+mental+health+near+${encodeURIComponent(activeQuery)}&t=&z=13&ie=UTF8&iwloc=&output=embed`
+    : ''
+
+  const verifiedHelplines = [
+    {
+      name: 'Tele-MANAS (Govt. of India)',
+      role: 'National Tele Mental Health Programme',
+      helpline: '14416 / 1800-891-4416',
+      hours: '24/7 Toll-Free Support',
+      url: 'https://telemanas.mohfw.gov.in',
+    },
+    {
+      name: 'KIRAN Mental Health Helpline',
+      role: 'Ministry of Social Justice & Empowerment',
+      helpline: '1800-599-0019',
+      hours: '24/7 Multi-language Assistance',
+      url: 'https://www.mentalhealthindia.org',
+    },
+    {
+      name: 'Vandrevala Foundation',
+      role: 'Free 24/7 Professional Counseling Support',
+      helpline: '+91 9999 666 555',
+      hours: '24/7 Whatsapp & Calling Available',
+      url: 'https://www.vandrevalafoundation.com',
+    },
+    {
+      name: 'NIMHANS Helpline',
+      role: 'National Institute of Mental Health & Neurosciences',
+      helpline: '080-46110007',
+      hours: 'Professional clinical guidance',
+      url: 'https://nimhans.ac.in',
+    },
+  ]
 
   return (
     <DashboardShell title="Find a therapist" subtitle="Explore professional support near you." active="/dashboard/therapists">
@@ -2517,7 +4071,7 @@ function TherapistLocator() {
         <section className="therapist-intro">
           <span className="eyebrow">SUPPORT BEYOND THIS SPACE</span>
           <h2>Find care that feels<br /><em>right for you.</em></h2>
-          <p>Search licensed mental health professionals and counseling spaces right here in your app.</p>
+          <p>Search licensed mental health professionals, counseling spaces, and verified 24/7 helplines.</p>
         </section>
 
         <form className="therapist-search-card" onSubmit={handleSearch}>
@@ -2527,74 +4081,265 @@ function TherapistLocator() {
               id="therapist-location"
               value={locationQuery}
               onChange={(event) => setLocationQuery(event.target.value)}
-              placeholder="e.g. New Delhi, Mumbai, Brooklyn, London..."
+              placeholder="e.g. New Delhi, Mumbai, Bengaluru, Pune, 712248..."
               autoComplete="postal-code"
             />
-            <button type="button" className="button button-outline location-button" onClick={useCurrentLocation}>
-              <MapPin aria-hidden="true" size={15} /> <span>Use my location</span>
+            <button type="button" className="button button-outline location-button" onClick={useCurrentLocation} disabled={loading}>
+              <MapPin aria-hidden="true" size={15} /> <span>{loading ? 'Locating…' : 'Use my location'}</span>
             </button>
           </div>
-          <button type="submit" className="button button-primary therapist-submit">
-            Search nearby practices <ArrowRight aria-hidden="true" size={15} />
+
+          {/* Quick Popular City Chips */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginTop: '10px' }}>
+            <span style={{ fontSize: '11px', color: 'var(--text-subtle, #53727a)', fontWeight: 600 }}>POPULAR:</span>
+            {quickCities.map((c) => (
+              <button
+                key={c}
+                type="button"
+                onClick={() => handleQuickSearch(c)}
+                disabled={loading}
+                style={{
+                  background: activeQuery.includes(c) ? 'rgba(83,138,132,0.18)' : 'rgba(83,138,132,0.08)',
+                  border: '1px solid rgba(83,138,132,0.25)',
+                  borderRadius: '9999px',
+                  padding: '2px 9px',
+                  fontSize: '11px',
+                  color: 'var(--text-main, #254148)',
+                  cursor: 'pointer',
+                  fontWeight: activeQuery.includes(c) ? 600 : 500,
+                }}
+              >
+                {c}
+              </button>
+            ))}
+          </div>
+
+          {/* Search Radius Selector */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '12px', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: '11px', color: 'var(--text-subtle, #53727a)', fontWeight: 600 }}>SEARCH RADIUS:</span>
+            {[5, 15, 25].map((rad) => (
+              <button
+                key={rad}
+                type="button"
+                onClick={() => {
+                  setSearchRadius(rad)
+                  if (activeQuery) {
+                    void performSearch({ query: activeQuery, radius_km: rad })
+                  }
+                }}
+                disabled={loading}
+                style={{
+                  background: searchRadius === rad ? '#538a84' : 'rgba(83,138,132,0.1)',
+                  color: searchRadius === rad ? '#ffffff' : 'var(--text-main, #254148)',
+                  border: '1px solid rgba(83,138,132,0.3)',
+                  borderRadius: '6px',
+                  padding: '3px 10px',
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                {rad} km
+              </button>
+            ))}
+          </div>
+
+          <button type="submit" className="button button-primary therapist-submit" disabled={loading || !locationQuery.trim()} style={{ marginTop: '12px' }}>
+            {loading ? 'Searching providers…' : 'Search nearby practices'} <ArrowRight aria-hidden="true" size={15} />
           </button>
           <p className="location-status" role="status" aria-live="polite">
-            {locationStatus || `Showing therapists near ${activeQuery}.`}
+            {locationStatus || (hasSearched ? `Showing therapists near ${activeQuery}.` : 'Search any city, PIN code, or use your location to discover nearby care.')}
           </p>
         </form>
 
-        <div className="in-app-map-card surface-card">
-          <div className="in-app-map-header">
-            <div>
-              <span className="eyebrow">INTERACTIVE LOCAL MAP</span>
-              <h3>Therapists & clinics near {activeQuery}</h3>
+        {!hasSearched ? (
+          <div className="surface-card" style={{ padding: '36px 24px', textAlign: 'center', marginTop: '20px', borderRadius: '12px' }}>
+            <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'rgba(83,138,132,0.12)', display: 'grid', placeItems: 'center', margin: '0 auto 14px', color: '#538a84' }}>
+              <MapPin size={24} />
             </div>
-            <span className="soft-pill"><MapPin size={13} /> In-app view</span>
+            <h3 style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text-main, #254148)', margin: '0 0 8px' }}>
+              Find mental health support near you
+            </h3>
+            <p style={{ fontSize: '13px', color: 'var(--text-subtle, #53727a)', maxWidth: '480px', margin: '0 auto', lineHeight: 1.6 }}>
+              Enter your city, neighborhood, or postal code above, or click &ldquo;Use my location&rdquo; to discover verified mental health clinics, counselors, and support services.
+            </p>
           </div>
-          <div className="map-frame-wrapper">
-            <iframe
-              title={`In-app map showing therapists near ${activeQuery}`}
-              src={mapEmbedUrl}
-              className="in-app-map-iframe"
-              loading="lazy"
-              allowFullScreen
-            />
-          </div>
-        </div>
-
-        <section className="therapist-clinics-list">
-          <div className="clinics-list-header">
-            <span className="eyebrow">VERIFIED CARE PROVIDERS</span>
-            <h3>Nearby practices open for consultation</h3>
-          </div>
-          <div className="clinics-grid">
-            {nearbyClinics.map((clinic) => (
-              <article className="surface-card clinic-card" key={clinic.name}>
-                <div className="clinic-badge-row">
-                  <span className="clinic-badge">{clinic.badge}</span>
-                  <span className="clinic-distance">{clinic.distance}</span>
+        ) : (
+          <>
+            <div className="in-app-map-card surface-card">
+              <div className="in-app-map-header">
+                <div>
+                  <span className="eyebrow">INTERACTIVE LOCAL MAP</span>
+                  <h3>Therapists & clinics near {activeQuery}</h3>
                 </div>
-                <h4>{clinic.name}</h4>
-                <p className="clinic-specialty">{clinic.specialty}</p>
-                <div className="clinic-meta">
-                  <span className="clinic-rating">{clinic.rating}</span>
-                  <span className="clinic-address"><MapPin size={12} /> {clinic.address}</span>
-                  <span className="clinic-phone">📞 {clinic.phone}</span>
+                <span className="soft-pill"><MapPin size={13} /> In-app view</span>
+              </div>
+              <div className="map-frame-wrapper">
+                <iframe
+                  title={`In-app map showing therapists near ${activeQuery}`}
+                  src={mapEmbedUrl}
+                  className="in-app-map-iframe"
+                  loading="lazy"
+                  allowFullScreen
+                />
+              </div>
+            </div>
+
+            {/* Real Verified Clinics & Providers */}
+            <section className="therapist-clinics-list">
+              <div className="clinics-list-header">
+                <span className="eyebrow">VERIFIED CARE PROVIDERS</span>
+                <h3>Nearby practices & mental health centers</h3>
+              </div>
+
+              {loading ? (
+                <p style={{ fontSize: '13px', color: '#83979c', padding: '16px 0' }}>Querying real providers and clinics near your location…</p>
+              ) : therapistsData?.therapists?.length > 0 ? (
+                <div className="clinics-grid">
+                  {therapistsData.therapists.map((clinic: any) => {
+                    const typeClass =
+                      clinic.type === 'Psychologist'
+                        ? 'clinic-type-psychologist'
+                        : clinic.type === 'Psychiatrist'
+                        ? 'clinic-type-psychiatrist'
+                        : clinic.type === 'Counselling Centre'
+                        ? 'clinic-type-counselling'
+                        : clinic.type === 'Hospital'
+                        ? 'clinic-type-hospital'
+                        : 'clinic-type-clinic'
+
+                    return (
+                      <article className="surface-card clinic-card" key={clinic.id || clinic.name}>
+                        <div className="clinic-badge-row">
+                          <span className={`clinic-type-badge ${typeClass}`}>{clinic.type || 'Verified Practice'}</span>
+                          {clinic.distance_km !== undefined && (
+                            <span className="clinic-distance">{clinic.distance_km} km away</span>
+                          )}
+                        </div>
+                        <h4>{clinic.name}</h4>
+                        <p className="clinic-specialty">{clinic.specialty || clinic.type || 'Mental Health & Psychological Support'}</p>
+                        <div className="clinic-meta">
+                          <span className="clinic-address"><MapPin size={12} /> {clinic.address}</span>
+                          {clinic.phone && <span className="clinic-phone">📞 {clinic.phone}</span>}
+                        </div>
+                        <div style={{ display: 'flex', gap: '8px', marginTop: '12px', flexWrap: 'wrap' }}>
+                          {clinic.actions?.directions_url && (
+                            <a
+                              href={clinic.actions.directions_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="button button-outline"
+                              style={{ fontSize: '11px', padding: '4px 10px', height: 'auto', display: 'inline-flex', alignItems: 'center', gap: '4px', textDecoration: 'none' }}
+                            >
+                              <Navigation size={12} /> Directions
+                            </a>
+                          )}
+                          {clinic.phone && (
+                            <a
+                              href={`tel:${clinic.phone}`}
+                              className="button button-primary"
+                              style={{ fontSize: '11px', padding: '4px 10px', height: 'auto', display: 'inline-flex', alignItems: 'center', gap: '4px', textDecoration: 'none' }}
+                            >
+                              <Phone size={12} /> Call clinic
+                            </a>
+                          )}
+                          {clinic.website && (
+                            <a
+                              href={clinic.website}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="button button-quiet"
+                              style={{ fontSize: '11px', padding: '4px 10px', height: 'auto', display: 'inline-flex', alignItems: 'center', gap: '4px', textDecoration: 'none' }}
+                            >
+                              <ExternalLink size={12} /> Website
+                            </a>
+                          )}
+                        </div>
+                      </article>
+                    )
+                  })}
+                </div>
+              ) : (
+                <div className="surface-card" style={{ padding: '24px 20px', borderRadius: '12px', textAlign: 'center' }}>
+                  <p style={{ margin: 0, fontSize: '13px', color: 'var(--text-subtle, #53727a)', lineHeight: 1.6 }}>
+                    No registered OpenStreetMap clinic nodes found directly within {searchRadius} km of <b>{activeQuery}</b>.
+                    You can expand your search radius to 25 km, explore on Google Maps, or reach out to the verified 24/7 helplines below.
+                  </p>
+                  <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', marginTop: '16px', flexWrap: 'wrap' }}>
+                    {searchRadius < 25 && (
+                      <button
+                        type="button"
+                        className="button button-outline"
+                        onClick={() => void performSearch({ query: activeQuery, radius_km: 25 })}
+                        style={{ fontSize: '12px' }}
+                      >
+                        Expand radius to 25 km
+                      </button>
+                    )}
+                    <a
+                      href={`https://www.google.com/maps/search/psychologists+and+mental+health+therapists+near+${encodeURIComponent(activeQuery)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="button button-primary"
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', textDecoration: 'none', fontSize: '12px' }}
+                    >
+                      Search "{activeQuery}" on Google Maps <ExternalLink size={14} />
+                    </a>
+                  </div>
+                </div>
+              )}
+            </section>
+          </>
+        )}
+
+        {/* 24/7 Verified National Helplines & Directories */}
+        <section style={{ marginTop: '28px' }}>
+          <div className="clinics-list-header">
+            <span className="eyebrow">ALWAYS AVAILABLE · CRISIS & DIRECTORIES</span>
+            <h3>Verified National Mental Health Directories & 24/7 Helplines</h3>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '14px', marginTop: '12px' }}>
+            {verifiedHelplines.map((h) => (
+              <article key={h.name} className="surface-card" style={{ padding: '16px', borderRadius: '12px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                <div>
+                  <b style={{ fontSize: '14px', color: '#254148', display: 'block' }}>{h.name}</b>
+                  <span style={{ fontSize: '12px', color: '#53727a', display: 'block', marginTop: '2px' }}>{h.role}</span>
+                  <div style={{ marginTop: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Phone size={13} style={{ color: '#538a84' }} />
+                    <b style={{ fontSize: '13px', color: '#538a84' }}>{h.helpline}</b>
+                  </div>
+                  <small style={{ fontSize: '11px', color: '#83979c', display: 'block', marginTop: '2px' }}>{h.hours}</small>
+                </div>
+                <div style={{ marginTop: '14px', display: 'flex', gap: '8px' }}>
+                  <a
+                    href={`tel:${h.helpline.split('/')[0].trim()}`}
+                    className="button button-primary"
+                    style={{ fontSize: '11px', padding: '5px 10px', height: 'auto', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                  >
+                    <Phone size={12} /> Call now
+                  </a>
+                  <a
+                    href={h.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="button button-outline"
+                    style={{ fontSize: '11px', padding: '5px 10px', height: 'auto', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                  >
+                    <ExternalLink size={12} /> Directory
+                  </a>
                 </div>
               </article>
             ))}
           </div>
         </section>
-
-        <p className="therapist-safety">
-          <ShieldCheck aria-hidden="true" size={16} /> Your exact location is only used locally to show nearby providers; it isn’t stored or shared.
-        </p>
       </div>
     </DashboardShell>
   )
 }
 
 function SettingsPage() {
-  const { user, linkGoogleAccount } = useAuth()
+  const { user, linkGoogleAccount, logOut } = useAuth()
+  const router = useRouter()
   const { t } = useAppLanguage()
   const [linking, setLinking] = useState(false)
   const [linkError, setLinkError] = useState('')
@@ -2752,6 +4497,27 @@ function SettingsPage() {
           </div>
           <div className="setting-control">
             <span className="privacy-badge"><ShieldCheck size={18} /> Private by design</span>
+          </div>
+        </section>
+
+        <section className="setting-row">
+          <div>
+            <b>Session & account access</b>
+            <p>Safely end your session and sign out of SunnoBuddy on this browser.</p>
+          </div>
+          <div className="setting-control">
+            <button
+              type="button"
+              className="button button-outline"
+              onClick={async () => {
+                await logOut()
+                router.replace('/login')
+              }}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: '#c05252', borderColor: '#e6c8c8', cursor: 'pointer' }}
+            >
+              <LogOut size={14} />
+              <span>{t('nav_signout')}</span>
+            </button>
           </div>
         </section>
       </div>

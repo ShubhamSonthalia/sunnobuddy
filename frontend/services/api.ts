@@ -140,16 +140,83 @@ export type IntakeQuestion = IntakeProgress & {
 export type MindLogReportResponse =
   | Blob
   | {
-      success: boolean
-      pdf_url?: string
-      pdf_base64?: string
-    }
+    success: boolean
+    pdf_url?: string
+    pdf_base64?: string
+  }
 
 export type EmotionAnalysis = {
   primaryEmotion: string
   confidence?: number
   distribution?: Record<string, number>
   analyzedAt?: string
+}
+
+export type ChatSession = {
+  session_id: string
+  conversation_id?: string
+  title: string
+  message_count?: number
+  created_at: string
+  updated_at?: string
+}
+
+export type ChatMessage = {
+  id: string
+  message_id?: string
+  role: 'user' | 'assistant'
+  content: string
+  created_at: string
+  timestamp?: string
+}
+
+export type IntakeUserStatus = {
+  completed: boolean
+  in_progress: boolean
+  session_id?: string
+  completed_at?: string
+  answers_count?: number
+  total_questions?: number
+  current_question?: any
+  progress?: any
+  latest_report?: any
+  assessment_report?: any
+  report?: any
+  version?: number
+  total_assessments?: number
+  monthly_checkin_due?: boolean
+  days_since_last_checkin?: number | null
+  next_checkin_date?: string | null
+  can_compare?: boolean
+}
+
+export type InsightSection = {
+  observed_data: string
+  interpretation: string
+}
+
+export type ComprehensiveInsights = {
+  data_sufficiency: 'sufficient' | 'minimal' | 'insufficient'
+  data_counts: {
+    mindlog_count: number
+    chat_messages_count: number
+    intake_answers_count: number
+  }
+  primary_emotion: string
+  emotion_distribution: Record<string, number>
+  sections: {
+    overall_patterns?: InsightSection
+    mood_trends?: InsightSection
+    recurring_themes?: InsightSection
+    stressors?: InsightSection
+    strengths?: InsightSection
+    conversation_patterns?: InsightSection
+    mindlog_observations?: InsightSection
+    intake_context?: InsightSection
+    self_care_suggestions?: string[]
+  }
+  generated_at?: string
+  non_diagnostic_notice?: string
 }
 
 export const services = {
@@ -180,11 +247,13 @@ export const services = {
       body: JSON.stringify({ message, language, session_id: sessionId || null }),
     }),
   listChatSessions: () =>
-    apiRequest<Array<{ session_id: string; title: string; created_at: string }>>('/api/chat/sessions'),
+    apiRequest<Array<ChatSession>>('/api/chat/sessions'),
+  getChatStats: () =>
+    apiRequest<{ total_conversations: number; total_user_messages: number }>('/api/chat/stats'),
   createChatSession: () =>
     apiRequest<{ session_id: string }>('/api/chat/new', { method: 'POST' }),
   getChatHistory: (sessionId: string) =>
-    apiRequest<Array<{ id: string; role: string; content: string; created_at: string }>>(
+    apiRequest<Array<ChatMessage>>(
       `/api/chat/${encodeURIComponent(sessionId)}`
     ),
   deleteChatSession: (sessionId: string) =>
@@ -222,6 +291,32 @@ export const services = {
     }),
 
   // Guided Intake
+  getIntakeStatus: () =>
+    apiRequest<IntakeUserStatus>('/api/intake/user-status'),
+
+  retakeIntake: () =>
+    apiRequest<any>('/api/intake/retake', { method: 'POST' }),
+
+  getIntakeHistory: () =>
+    apiRequest<Array<{
+      session_id: string
+      version: number
+      completed_at: string | null
+      summary: string
+      assessment_report?: any
+    }>>('/api/intake/history'),
+
+  getIntakeAssessment: (sessionId: string) =>
+    apiRequest<any>(`/api/intake/assessments/${encodeURIComponent(sessionId)}`),
+
+  getIntakeComparison: (currentId?: string, previousId?: string) => {
+    const qs = new URLSearchParams()
+    if (currentId) qs.set('current_id', currentId)
+    if (previousId) qs.set('previous_id', previousId)
+    const suffix = qs.toString() ? `?${qs.toString()}` : ''
+    return apiRequest<any>(`/api/intake/compare${suffix}`)
+  },
+
   getCurrentIntakeQuestion: async (userId: string): Promise<IntakeQuestion> => {
     try {
       const state = await apiRequest<{
@@ -461,6 +556,9 @@ export const services = {
     >(`/api/emotions/trends${qs}`)
   },
 
+  getComprehensiveInsights: () =>
+    apiRequest<ComprehensiveInsights>('/api/emotions/comprehensive'),
+
   // Reports
   createMindLogReport: async (startDate: string, endDate: string): Promise<MindLogReportResponse> => {
     const reportData = await apiRequest<{ report_id: string }>('/api/reports/mindlog', {
@@ -471,8 +569,19 @@ export const services = {
     return apiRequest<Blob>(`/api/reports/${encodeURIComponent(reportData.report_id)}/download`)
   },
 
+  generateWellnessReport: (params: {
+    period?: string
+    start_date?: string
+    end_date?: string
+    sources?: string[]
+  }) =>
+    apiRequest<any>('/api/reports/generate', {
+      method: 'POST',
+      body: JSON.stringify(params),
+    }),
+
   listReports: () =>
-    apiRequest<Array<{ report_id: string; start_date: string; end_date: string; created_at: string }>>('/api/reports'),
+    apiRequest<Array<{ report_id: string; period?: string; start_date?: string; end_date?: string; created_at: string }>>('/api/reports'),
 
   getReport: (reportId: string) =>
     apiRequest<any>(`/api/reports/${encodeURIComponent(reportId)}`),
@@ -482,4 +591,50 @@ export const services = {
 
   deleteReport: (reportId: string) =>
     apiRequest<void>(`/api/reports/${encodeURIComponent(reportId)}`, { method: 'DELETE' }),
+
+  // Therapist Locator
+  searchTherapists: (params: { lat?: number; lon?: number; query?: string; radius_km?: number }) => {
+    const qs = new URLSearchParams()
+    if (params.lat !== undefined && params.lon !== undefined) {
+      qs.set('lat', String(params.lat))
+      qs.set('lon', String(params.lon))
+    }
+    if (params.query) qs.set('query', params.query)
+    if (params.radius_km) qs.set('radius_km', String(params.radius_km))
+    return apiRequest<{
+      location: string
+      radius_km: number
+      radius_expanded?: boolean
+      count: number
+      total_providers_found?: number
+      source?: string
+      notice?: string
+      coordinates?: { lat: number | null; lon: number | null } | null
+      therapists: Array<{
+        id: string
+        name: string
+        type: string
+        specialty?: string
+        address: string
+        distance_km?: number
+        phone?: string
+        website?: string
+        verified: boolean
+        emergency: boolean
+        actions: {
+          directions_url?: string
+          call_url?: string
+          website_url?: string
+        }
+      }>
+      providers?: Array<any>
+      verified_directories?: Array<{
+        name: string
+        description?: string
+        url: string
+        helpline?: string
+      }>
+      directory_links?: Array<any>
+    }>(`/api/therapists/search?${qs.toString()}`)
+  },
 }

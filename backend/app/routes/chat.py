@@ -17,6 +17,11 @@ def sessions(user=Depends(get_current_user)):
     return ok(svc.list_sessions(user["uid"]))
 
 
+@router.get("/stats")           # /{session_id} se pehle
+def stats(user=Depends(get_current_user)):
+    return ok(svc.get_chat_stats(user["uid"]))
+
+
 @router.post("/new")            # /{session_id} se pehle
 def new(user=Depends(get_current_user)):
     return ok({"session_id": svc.new_session(user["uid"])}, "Session created")

@@ -1,4 +1,5 @@
 from datetime import date
+from typing import Optional
 from fastapi import APIRouter, Depends, Response
 from pydantic import BaseModel
 from app.core.security import get_current_user
@@ -9,13 +10,17 @@ router = APIRouter(prefix="/api/reports", tags=["reports"])
 
 
 class ReportRequest(BaseModel):
-    start_date: date
-    end_date: date
+    period: Optional[str] = "30d"  # 7d, 30d, 90d, all, custom
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+    sources: Optional[list[str]] = None
 
 
+@router.post("")
+@router.post("/generate")
 @router.post("/mindlog")
 def create(body: ReportRequest, user=Depends(get_current_user)):
-    return ok(svc.create_report(user["uid"], body.start_date, body.end_date), "Report generated")
+    return ok(svc.create_wellness_report(user["uid"], body), "Report generated")
 
 
 @router.get("")

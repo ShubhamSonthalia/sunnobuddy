@@ -8,6 +8,11 @@ from app.utils.response_utils import ok
 router = APIRouter(prefix="/api/emotions", tags=["emotions"])
 
 
+@router.get("/comprehensive")
+def comprehensive(user=Depends(get_current_user)):
+    return ok(svc.get_comprehensive_insights(user["uid"]))
+
+
 @router.post("/analyze/{entry_id}")
 def analyze(entry_id: str, user=Depends(get_current_user)):
     return ok(svc.analyze_entry(user["uid"], entry_id), "Analysis completed")

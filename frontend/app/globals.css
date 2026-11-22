@@ -1732,3 +1732,990 @@ html.dark .chat-avatar, html.dark .tiny-mascot { background-color: #19343D; }
 @media (max-width: 390px) {
   .brand:not(.brand-small) .logo-wordmark { font-size: 14px; letter-spacing: -.6px; }
 }
+
+/* --- High Contrast & Dark Mode Polish for Insights, Intake, and Reports --- */
+.insight-entry {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-color, #e2ebec);
+  border-radius: 8px;
+  background: var(--surface-card, #ffffff);
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.emotion-badge-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.synthesis-metric-box {
+  background: #f5f9f8;
+  border-radius: 8px;
+  padding: 10px;
+  text-align: center;
+  border: 1px solid transparent;
+}
+.synthesis-metric-box span {
+  color: #83979c;
+}
+.synthesis-metric-box b {
+  color: #254148;
+}
+
+.observed-data-card {
+  background: #f7faf9;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border-left: 3px solid #538a84;
+}
+.observed-data-card p {
+  color: #334e56;
+}
+
+.ai-reflection-card {
+  background: #fcf8f3;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border-left: 3px solid #c29864;
+}
+.ai-reflection-card p {
+  color: #4a3d2e;
+}
+
+.self-care-container {
+  background: linear-gradient(135deg, #f7faf9 0%, #edf5f2 100%);
+  color: #254148;
+}
+
+.intake-report-card {
+  background: #ffffff;
+  padding: 14px 16px;
+  border-radius: 10px;
+  border: 1px solid #e8efee;
+}
+.intake-report-card b {
+  color: #254148;
+}
+.intake-report-card p, .intake-report-card li {
+  color: #53727a;
+}
+
+.intake-summary-card {
+  background: rgba(83, 138, 132, 0.08);
+  padding: 16px;
+  border-radius: 10px;
+  border: 1px solid rgba(83, 138, 132, 0.2);
+}
+.intake-summary-card b {
+  color: #254148;
+}
+.intake-summary-card p {
+  color: #254148;
+}
+
+/* Dark mode theme overrides */
+html.dark .insight-entry {
+  background: #19343D !important;
+  border-color: #30474b !important;
+  color: #FFF8ED !important;
+}
+html.dark .insight-entry > div b {
+  color: #FFF8ED !important;
+}
+html.dark .insight-entry small {
+  color: #afc0be !important;
+}
+html.dark .insight-entry > span {
+  color: #8cd2c7 !important;
+}
+html.dark .insight-entry > a {
+  background: #254148 !important;
+  color: #8cd2c7 !important;
+}
+html.dark .insight-entry > a:hover {
+  background: #2f535c !important;
+}
+
+html.dark .synthesis-metric-box {
+  background: #152c34 !important;
+  border-color: #30474b !important;
+}
+html.dark .synthesis-metric-box span {
+  color: #8ca3a6 !important;
+}
+html.dark .synthesis-metric-box b {
+  color: #FFF8ED !important;
+}
+
+html.dark .observed-data-card {
+  background: rgba(83, 138, 132, 0.12) !important;
+  border-left-color: #538a84 !important;
+}
+html.dark .observed-data-card p {
+  color: #d4e5e2 !important;
+}
+
+html.dark .ai-reflection-card {
+  background: rgba(217, 119, 6, 0.12) !important;
+  border-left-color: #d97706 !important;
+}
+html.dark .ai-reflection-card p {
+  color: #fde68a !important;
+}
+
+html.dark .self-care-container {
+  background: #19343D !important;
+  border: 1px solid #30474b !important;
+  color: #FFF8ED !important;
+}
+html.dark .self-care-container div {
+  color: #FFF8ED !important;
+}
+
+html.dark .intake-report-card {
+  background: #19343D !important;
+  border-color: #30474b !important;
+}
+html.dark .intake-report-card b {
+  color: #FFF8ED !important;
+}
+html.dark .intake-report-card p, html.dark .intake-report-card li {
+  color: #afc0be !important;
+}
+
+html.dark .intake-summary-card {
+  background: rgba(83, 138, 132, 0.18) !important;
+  border-color: rgba(83, 138, 132, 0.35) !important;
+}
+html.dark .intake-summary-card b {
+  color: #8cd2c7 !important;
+}
+html.dark .intake-summary-card p {
+  color: #d4e5e2 !important;
+}
+
+/* --- Task 3: Sidebar Account Popover & Menu --- */
+.sidebar-profile-wrap {
+  position: relative;
+  width: 100%;
+}
+
+.account-popover {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  background: var(--surface-card, #ffffff);
+  border: 1px solid var(--border-color, #e1eaec);
+  border-radius: 12px;
+  padding: 14px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.account-popover-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 8px;
+}
+
+.account-popover-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.account-popover-info b {
+  font-size: 13px;
+  color: var(--text-main, #254148);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.account-popover-info small {
+  font-size: 11px;
+  color: var(--text-subtle, #53727a);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.account-popover-divider {
+  height: 1px;
+  background: var(--border-color, #e1eaec);
+  margin: 2px 0;
+}
+
+.account-popover-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-main, #254148);
+  text-decoration: none;
+  background: transparent;
+  border: none;
+  width: 100%;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.account-popover-item:hover {
+  background: rgba(83, 138, 132, 0.08);
+  color: #254148;
+}
+
+.account-popover-item.signout-item {
+  color: #c94a4a;
+}
+
+.account-popover-item.signout-item:hover {
+  background: rgba(201, 74, 74, 0.08);
+  color: #b03232;
+}
+
+.signout-confirm-box {
+  background: rgba(201, 74, 74, 0.06);
+  border: 1px solid rgba(201, 74, 74, 0.18);
+  border-radius: 8px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.signout-confirm-box p {
+  font-size: 11px;
+  color: #8c2a2a;
+  margin: 0;
+}
+
+.signout-confirm-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.signout-danger-btn {
+  background: #c94a4a !important;
+  color: #fff !important;
+  padding: 4px 10px !important;
+  font-size: 11px !important;
+  height: auto !important;
+}
+
+/* Dark mode overrides for account popover */
+html.dark .account-popover {
+  background: #19343D !important;
+  border-color: #30474b !important;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+}
+
+html.dark .account-popover-info b {
+  color: #FFF8ED !important;
+}
+
+html.dark .account-popover-info small {
+  color: #afc0be !important;
+}
+
+html.dark .account-popover-divider {
+  background: #30474b !important;
+}
+
+html.dark .account-popover-item {
+  color: #FFF8ED !important;
+}
+
+html.dark .account-popover-item:hover {
+  background: #254148 !important;
+}
+
+html.dark .account-popover-item.signout-item {
+  color: #f87171 !important;
+}
+
+html.dark .account-popover-item.signout-item:hover {
+  background: rgba(248, 113, 113, 0.12) !important;
+}
+
+html.dark .signout-confirm-box {
+  background: rgba(248, 113, 113, 0.1) !important;
+  border-color: rgba(248, 113, 113, 0.25) !important;
+}
+
+html.dark .signout-confirm-box p {
+  color: #fca5a5 !important;
+}
+
+/* --- Task 1: Therapist Finder Provider Badges & Radius Expansion --- */
+.clinic-type-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 9999px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.clinic-type-psychologist { background: rgba(83, 138, 132, 0.14); color: #538a84; border: 1px solid rgba(83, 138, 132, 0.3); }
+.clinic-type-psychiatrist { background: rgba(139, 92, 246, 0.14); color: #8b5cf6; border: 1px solid rgba(139, 92, 246, 0.3); }
+.clinic-type-counselling { background: rgba(59, 130, 246, 0.14); color: #3b82f6; border: 1px solid rgba(59, 130, 246, 0.3); }
+.clinic-type-clinic { background: rgba(16, 185, 129, 0.14); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3); }
+.clinic-type-hospital { background: rgba(239, 68, 68, 0.14); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3); }
+
+.radius-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: rgba(83, 138, 132, 0.1);
+  color: #538a84;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+/* --- Task 2: Guided Reflection Report Hierarchy --- */
+.report-summary-highlight {
+  background: linear-gradient(135deg, rgba(83, 138, 132, 0.08) 0%, rgba(37, 65, 72, 0.03) 100%);
+  border: 1px solid rgba(83, 138, 132, 0.22);
+  border-radius: 12px;
+  padding: 20px 24px;
+  margin-bottom: 20px;
+}
+.report-summary-highlight h4 {
+  margin: 0 0 6px;
+  font-size: 16px;
+  color: var(--text-main, #254148);
+}
+.report-summary-highlight p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-subtle, #53727a);
+}
+
+.report-section-group {
+  margin-bottom: 22px;
+}
+.report-group-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: #538a84;
+  margin-bottom: 12px;
+}
+.report-grid-duo {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 14px;
+}
+.report-card-rich {
+  background: var(--surface-card, #ffffff);
+  border: 1px solid var(--border-color, #e8efee);
+  border-radius: 10px;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.report-card-rich:hover {
+  box-shadow: 0 4px 14px -2px rgba(0, 0, 0, 0.06);
+}
+.report-card-rich .card-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-main, #254148);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.report-card-rich .card-content {
+  font-size: 12px;
+  color: var(--text-subtle, #53727a);
+  line-height: 1.6;
+  margin: 0;
+}
+
+html.dark .report-summary-highlight {
+  background: rgba(83, 138, 132, 0.12) !important;
+  border-color: rgba(83, 138, 132, 0.3) !important;
+}
+html.dark .report-summary-highlight h4 {
+  color: #FFF8ED !important;
+}
+html.dark .report-summary-highlight p {
+  color: #d4e5e2 !important;
+}
+html.dark .report-card-rich {
+  background: #19343D !important;
+  border-color: #30474b !important;
+}
+html.dark .report-card-rich .card-label {
+  color: #FFF8ED !important;
+}
+html.dark .report-card-rich .card-content {
+  color: #afc0be !important;
+}
+
+/* ==========================================================================
+   Task 1: Monthly Guided Wellness Comparison Styles
+   ========================================================================== */
+.comparison-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  width: 100%;
+}
+
+.comparison-header-card {
+  background: linear-gradient(135deg, rgba(83, 138, 132, 0.12) 0%, rgba(37, 65, 72, 0.05) 100%);
+  border: 1px solid rgba(83, 138, 132, 0.28);
+  border-radius: 14px;
+  padding: 22px 24px;
+}
+
+.comparison-header-card h3 {
+  margin: 0 0 8px;
+  font-size: 19px;
+  font-weight: 700;
+  color: var(--text-main, #254148);
+}
+
+.comparison-header-card p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-subtle, #53727a);
+}
+
+.comparison-dimension-card {
+  background: var(--surface, #ffffff);
+  border: 1px solid var(--border-subtle, #e2eae8);
+  border-radius: 14px;
+  padding: 20px 22px;
+  box-shadow: 0 2px 8px -1px rgba(0, 0, 0, 0.04);
+}
+
+.comparison-dimension-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.comparison-dimension-header h4 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-main, #254148);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.comparison-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+
+.comparison-badge-lighter {
+  background: rgba(16, 185, 129, 0.14);
+  color: #059669;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.comparison-badge-evolving {
+  background: rgba(83, 138, 132, 0.14);
+  color: #538a84;
+  border: 1px solid rgba(83, 138, 132, 0.3);
+}
+
+.comparison-badge-challenging {
+  background: rgba(245, 158, 11, 0.14);
+  color: #d97706;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.comparison-duo {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-top: 10px;
+}
+
+.comparison-side {
+  background: rgba(83, 138, 132, 0.04);
+  border: 1px solid rgba(83, 138, 132, 0.15);
+  border-radius: 10px;
+  padding: 14px;
+}
+
+.comparison-side-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-subtle, #53727a);
+  display: block;
+  margin-bottom: 6px;
+}
+
+.comparison-side-text {
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--text-main, #254148);
+  margin: 0;
+}
+
+.comparison-insights-box {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: rgba(83, 138, 132, 0.07);
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--text-subtle, #53727a);
+}
+
+.comparison-tags-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.comparison-tag-card {
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--border-subtle, #e2eae8);
+  background: var(--surface, #ffffff);
+}
+
+.comparison-tag-card b {
+  font-size: 12px;
+  display: block;
+  margin-bottom: 6px;
+  color: var(--text-main, #254148);
+}
+
+.comparison-tag-card ul {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-subtle, #53727a);
+}
+
+.monthly-checkin-banner {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: linear-gradient(135deg, rgba(83, 138, 132, 0.15) 0%, rgba(37, 65, 72, 0.08) 100%);
+  border: 1px solid rgba(83, 138, 132, 0.35);
+  border-radius: 12px;
+  padding: 16px 20px;
+  margin: 16px 0;
+  box-shadow: 0 2px 10px -2px rgba(83, 138, 132, 0.12);
+}
+
+.monthly-checkin-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--teal, #538a84);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.monthly-checkin-info {
+  flex: 1;
+}
+
+.monthly-checkin-info b {
+  display: block;
+  font-size: 14.5px;
+  color: var(--text-main, #254148);
+  margin-bottom: 3px;
+}
+
+.monthly-checkin-info p {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--text-subtle, #53727a);
+  line-height: 1.5;
+}
+
+.comparison-baseline-card {
+  padding: 32px 28px;
+  text-align: center;
+  border-radius: 14px;
+  margin: 20px 0;
+}
+
+.comparison-baseline-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: rgba(83, 138, 132, 0.15);
+  color: var(--teal, #538a84);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 16px;
+}
+
+.comparison-tabs-bar {
+  display: flex;
+  gap: 10px;
+  margin: 20px 0 16px;
+  border-bottom: 1px solid var(--border-subtle, #e2eae8);
+  padding-bottom: 12px;
+}
+
+.comparison-tab-btn {
+  background: none;
+  border: none;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-subtle, #53727a);
+  padding: 8px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.18s ease;
+}
+
+.comparison-tab-btn.is-active {
+  background: rgba(83, 138, 132, 0.14);
+  color: var(--teal, #538a84);
+}
+
+/* ==========================================================================
+   Task 2: Suicide & Crisis Support Panel in Companion Chat
+   ========================================================================== */
+.crisis-panel-container {
+  background: linear-gradient(135deg, rgba(220, 38, 38, 0.07) 0%, rgba(239, 68, 68, 0.03) 100%);
+  border: 1.5px solid rgba(220, 38, 38, 0.35);
+  border-radius: 14px;
+  padding: 18px 20px;
+  margin: 14px 0;
+  box-shadow: 0 4px 16px -2px rgba(220, 38, 38, 0.12);
+}
+
+.crisis-panel-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+  color: #b91c1c;
+}
+
+.crisis-panel-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: #b91c1c;
+}
+
+.crisis-panel-intro {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-main, #254148);
+  margin: 0 0 14px;
+}
+
+.crisis-immediate-alert {
+  background: rgba(220, 38, 38, 0.1);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #991b1b;
+  font-weight: 500;
+  margin-bottom: 14px;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.crisis-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.crisis-card-item {
+  background: var(--surface, #ffffff);
+  border: 1px solid rgba(220, 38, 38, 0.22);
+  border-radius: 10px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.crisis-card-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-main, #254148);
+  display: block;
+}
+
+.crisis-card-desc {
+  font-size: 11px;
+  color: var(--text-subtle, #53727a);
+  line-height: 1.4;
+  display: block;
+}
+
+.crisis-call-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: #dc2626;
+  color: #ffffff !important;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 8px 12px;
+  border-radius: 8px;
+  text-decoration: none;
+  min-height: 36px;
+  transition: background 0.15s ease;
+}
+
+.crisis-call-btn:hover {
+  background: #b91c1c;
+}
+
+.crisis-dismiss-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 10px;
+}
+
+.crisis-continue-btn {
+  background: none;
+  border: 1px solid rgba(83, 138, 132, 0.3);
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 11.5px;
+  color: var(--text-subtle, #53727a);
+  cursor: pointer;
+}
+
+/* ==========================================================================
+   Tasks 3, 4, 5: Shell Footer Disclaimer & Mobile Bottom Navigation
+   ========================================================================== */
+.shell-footer-disclaimer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 18px 14px;
+  font-size: 11.5px;
+  color: var(--text-subtle, #53727a);
+  text-align: center;
+  border-top: 1px solid var(--border-subtle, #e2eae8);
+  margin-top: 32px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.shell-footer-disclaimer a {
+  color: inherit;
+  text-decoration: underline;
+}
+
+/* Mobile Bottom Navigation Bar (Screens < 768px) */
+.mobile-bottom-nav {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .mobile-bottom-nav {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 60px;
+    background: var(--surface, #ffffff);
+    border-top: 1px solid var(--border-subtle, #e2eae8);
+    z-index: 40;
+    box-shadow: 0 -3px 12px rgba(0, 0, 0, 0.05);
+    justify-content: space-around;
+    align-items: center;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .mobile-bottom-nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    flex: 1;
+    height: 100%;
+    color: var(--text-subtle, #53727a);
+    text-decoration: none;
+    font-size: 10px;
+    font-weight: 500;
+    min-width: 0;
+    transition: color 0.15s ease;
+  }
+
+  .mobile-bottom-nav-item.is-active {
+    color: #538a84;
+    font-weight: 700;
+  }
+
+  .mobile-bottom-nav-item svg {
+    flex-shrink: 0;
+  }
+
+  /* Ensure page content has buffer room on mobile so bottom nav never covers it */
+  .page-content {
+    padding-bottom: 78px !important;
+  }
+
+  /* Compact Header on small phones */
+  .app-header {
+    height: 58px !important;
+    padding: 0 12px !important;
+  }
+
+  .header-titles {
+    min-width: 0;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  .header-titles h1 {
+    font-size: 16px !important;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .header-titles p {
+    font-size: 10.5px !important;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Comparison duo stack on mobile */
+  .comparison-duo {
+    grid-template-columns: 1fr;
+  }
+
+  .comparison-tags-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .crisis-cards-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Dark mode overrides for crisis and comparison */
+html.dark .comparison-dimension-card {
+  background: #19343D !important;
+  border-color: #30474b !important;
+}
+
+html.dark .comparison-header-card {
+  background: rgba(83, 138, 132, 0.15) !important;
+  border-color: rgba(83, 138, 132, 0.3) !important;
+}
+
+html.dark .comparison-header-card h3 {
+  color: #FFF8ED !important;
+}
+
+html.dark .comparison-dimension-header h4 {
+  color: #FFF8ED !important;
+}
+
+html.dark .comparison-side {
+  background: rgba(0, 0, 0, 0.18) !important;
+  border-color: #30474b !important;
+}
+
+html.dark .comparison-side-text {
+  color: #d4e5e2 !important;
+}
+
+html.dark .comparison-tag-card {
+  background: #152c34 !important;
+  border-color: #2b4146 !important;
+}
+
+html.dark .crisis-card-item {
+  background: #1e282d !important;
+  border-color: rgba(239, 68, 68, 0.4) !important;
+}
+
+html.dark .crisis-card-title {
+  color: #FFF8ED !important;
+}
+
+html.dark .mobile-bottom-nav {
+  background: #13272e !important;
+  border-color: #263d43 !important;
+}
+
+html.dark .mobile-bottom-nav-item {
+  color: #8fa6a9 !important;
+}
+
+html.dark .mobile-bottom-nav-item.is-active {
+  color: #79c0b8 !important;
+}
+
+html.dark .shell-footer-disclaimer {
+  border-color: #263d43 !important;
+  color: #8fa6a9 !important;
+}
+
+
+

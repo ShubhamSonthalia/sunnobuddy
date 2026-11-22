@@ -198,6 +198,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     logOut: async () => {
       if (typeof window !== 'undefined') {
         localStorage.removeItem(GUEST_STORAGE_KEY)
+        localStorage.removeItem('sunnobuddy_active_session_id')
+        localStorage.removeItem('sunnobuddy_intake_session_id')
+        localStorage.removeItem('sunnobuddy_pending_intake')
       }
       if (auth) {
         try {
