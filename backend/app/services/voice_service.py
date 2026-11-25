@@ -7,7 +7,7 @@ from google import genai
 from app.core.config import settings
 from app.core.firebase import get_db
 from app.services import chat_service
-from app.services.crisis_service import detect_crisis, crisis_reply, HELPLINES
+from app.services.crisis_service import classify_risk, crisis_reply, HELPLINES
 from app.services.encryption_service import encrypt
 
 SESSION_MINUTES = 15
@@ -106,11 +106,13 @@ def save_transcript(uid: str, session_id: str, turns: list) -> dict:
     batch = get_db().batch()
     msgs = ref.collection("messages")
     crisis_lang = None
+    running_history = []
     for i, t in enumerate(turns):
         if t.role == "user":
-            flagged, lang = detect_crisis(t.text)
-            if flagged and crisis_lang is None:
-                crisis_lang = lang
+            cls = classify_risk(t.text, history=running_history)
+            if cls["personal_crisis"] and crisis_lang is None:
+                crisis_lang = cls["language"]
+        running_history.append({"role": t.role, "content": t.text})
         enc = encrypt(t.text, uid)
         batch.set(msgs.document(), {
             "role": t.role,

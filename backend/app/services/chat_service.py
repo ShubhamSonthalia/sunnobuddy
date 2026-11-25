@@ -7,7 +7,13 @@ from google.genai import types
 
 from app.core.config import settings
 from app.core.firebase import get_db
-from app.services.crisis_service import detect_crisis, crisis_reply, HELPLINES
+from app.services.crisis_service import (
+    HELPLINES,
+    clarify_reply,
+    classify_risk,
+    crisis_reply,
+    third_party_fallback_reply,
+)
 from app.services.encryption_service import encrypt, decrypt
 
 SYSTEM_PROMPT = """You are SunnoBuddy, a warm, supportive companion for students.
@@ -150,7 +156,7 @@ def delete_session(uid: str, session_id: str) -> None:
     ref.delete()
 
 
-def _generate(history: list, message: str, language: str) -> str:
+def _generate(history: list, message: str, language: str, extra_instruction: str = "") -> str:
     contents = [
         types.Content(
             role="user" if m["role"] == "user" else "model",
@@ -160,6 +166,8 @@ def _generate(history: list, message: str, language: str) -> str:
     ]
     contents.append(types.Content(role="user", parts=[types.Part(text=message)]))
     system = SYSTEM_PROMPT + "\n" + LANG_HINT.get(language, "")
+    if extra_instruction:
+        system = system + "\n\n" + extra_instruction
     resp = _gemini().models.generate_content(
         model=settings.gemini_model,
         contents=contents,
@@ -212,12 +220,34 @@ def _save_pair(uid, session_ref, user_text, reply, user_time):
     batch.commit()
 
 
-def _log_safety_event(uid: str, session_id: str):
-    get_db().collection("users").document(uid).collection("safetyEvents").add({
+def _log_safety_event(uid: str, session_id: str, classification: Optional[dict] = None):
+    payload = {
         "sessionId": session_id,
         "channel": "chat",
         "createdAt": firestore.SERVER_TIMESTAMP,
-    })
+    }
+    if classification:
+        payload.update({
+            "personAtRisk": classification.get("person_at_risk"),
+            "intent": classification.get("intent"),
+            "severity": classification.get("severity"),
+            "immediacy": classification.get("immediacy"),
+            "confidence": classification.get("confidence"),
+            "responseType": classification.get("response_type"),
+        })
+    get_db().collection("users").document(uid).collection("safetyEvents").add(payload)
+
+
+THIRD_PARTY_SUPPORT_INSTRUCTION = """IMPORTANT CONTEXT:
+The user is NOT expressing personal suicidal ideation—they are worried about or trying to help ANOTHER person (such as a friend, sibling, partner, or roommate).
+- Do NOT treat or label the user as personally suicidal.
+- Validate the user's own feelings (fear, helplessness, overwhelm, care).
+- Provide practical, compassionate guidance tailored to their situation:
+  1. Encourage asking their friend directly and calmly whether they are thinking about hurting themselves or have a plan (reassuring them that asking directly does not plant the idea).
+  2. Suggest a warm phrase they can actually say to their friend.
+  3. If immediate danger exists, advise not leaving the friend alone (if safe), involving trusted adults/family/professionals, and contacting emergency services (112) or helplines (Tele-MANAS 14416, KIRAN 1800-599-0019) for the friend.
+  4. Remind the user they do not have to carry this alone or act as a sole crisis counselor.
+- If you mention helpline numbers, explicitly state they are resources for helping the friend/person in distress."""
 
 
 def send_message(uid: str, session_id: Optional[str], message: str, language: str) -> dict:
@@ -239,17 +269,57 @@ def send_message(uid: str, session_id: Optional[str], message: str, language: st
         })
 
     user_time = datetime.now(timezone.utc)
-
-    flagged, matched_lang = detect_crisis(message)
-    if flagged:
-        reply_lang = language if language in ("en", "hi", "hinglish") else matched_lang
-        reply = crisis_reply(reply_lang)
-        _log_safety_event(uid, session_id)
-        _save_pair(uid, session_ref, message, reply, user_time)
-        return {"session_id": session_id, "reply": reply,
-                "crisis_detected": True, "helplines": HELPLINES}
-
     history = get_history(uid, session_id, limit=20)
+
+    classification = classify_risk(message, history=history, language=language)
+    detected_lang = classification["language"]
+    reply_lang = detected_lang if detected_lang in ("hi", "hinglish") else (language if language in ("en", "hi", "hinglish") else detected_lang)
+    resp_type = classification["response_type"]
+
+    if classification["risk_detected"] or resp_type == "clarify_ambiguous_risk":
+        _log_safety_event(uid, session_id, classification)
+
+    if resp_type == "personal_crisis_support":
+        reply = crisis_reply(reply_lang)
+        _save_pair(uid, session_ref, message, reply, user_time)
+        return {
+            "session_id": session_id,
+            "reply": reply,
+            "crisis_detected": True,
+            "crisis_mode": "personal",
+            "response_type": resp_type,
+            "helplines": HELPLINES,
+        }
+
+    if resp_type == "support_user_helping_third_party":
+        try:
+            reply = _generate(history, message, reply_lang, extra_instruction=THIRD_PARTY_SUPPORT_INSTRUCTION)
+        except Exception as e:
+            print("[Chat] Gemini third-party support exception:", type(e).__name__, e)
+            reply = third_party_fallback_reply(reply_lang)
+        _save_pair(uid, session_ref, message, reply, user_time)
+        show_ui = bool(classification.get("show_crisis_ui"))
+        return {
+            "session_id": session_id,
+            "reply": reply,
+            "crisis_detected": show_ui,
+            "crisis_mode": "third_party" if show_ui else "none",
+            "response_type": resp_type,
+            "helplines": HELPLINES if show_ui else [],
+        }
+
+    if resp_type == "clarify_ambiguous_risk":
+        reply = clarify_reply(reply_lang)
+        _save_pair(uid, session_ref, message, reply, user_time)
+        return {
+            "session_id": session_id,
+            "reply": reply,
+            "crisis_detected": False,
+            "crisis_mode": "none",
+            "response_type": resp_type,
+            "helplines": [],
+        }
+
     try:
         reply = _generate(history, message, language)
     except Exception as e:
@@ -257,5 +327,11 @@ def send_message(uid: str, session_id: Optional[str], message: str, language: st
         reply = "I'm listening and right here with you. It feels like a lot to hold today. Could you tell me a little more about what's on your heart?"
 
     _save_pair(uid, session_ref, message, reply, user_time)
-    return {"session_id": session_id, "reply": reply,
-            "crisis_detected": False, "helplines": []}
+    return {
+        "session_id": session_id,
+        "reply": reply,
+        "crisis_detected": False,
+        "crisis_mode": "none",
+        "response_type": "normal_supportive",
+        "helplines": [],
+    }

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { ProtectedRoute, useAuth } from '@/contexts/auth-context'
 import { services, type EmotionAnalysis, type MindLogEntry, type ChatSession, type ComprehensiveInsights, type IntakeUserStatus } from '@/services/api'
@@ -550,6 +550,172 @@ function Brand({ small = false }: { small?: boolean }) {
   )
 }
 
+const RESTRICTED_FEATURES: Record<string, string> = {
+  '/dashboard/intake': 'Guided Reflection',
+  '/dashboard/mindlog': 'MindLog',
+  '/dashboard/insights': 'Mood Insights',
+  '/dashboard/reports': 'Reports',
+  '/dashboard/settings': 'Settings',
+}
+
+function getRestrictedFeatureName(pathname: string): string | null {
+  for (const [prefix, name] of Object.entries(RESTRICTED_FEATURES)) {
+    if (pathname === prefix || pathname.startsWith(`${prefix}/`)) {
+      return name
+    }
+  }
+  return null
+}
+
+const LockedModalContext = createContext<{
+  openLockedModal: (featureName: string) => void
+}>({
+  openLockedModal: () => {},
+})
+
+const FEATURE_ROUTES: Record<string, string> = {
+  'Guided Reflection': '/dashboard/intake',
+  'MindLog': '/dashboard/mindlog',
+  'Mood Insights': '/dashboard/insights',
+  'Reports': '/dashboard/reports',
+  'Settings': '/dashboard/settings',
+}
+
+function LockedFeatureModal({
+  featureName,
+  onClose,
+}: {
+  featureName: string
+  onClose: () => void
+}) {
+  const router = useRouter()
+  const targetRoute = FEATURE_ROUTES[featureName] || '/dashboard'
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [onClose])
+
+  return (
+    <div
+      className="locked-modal-backdrop"
+      role="presentation"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose()
+      }}
+    >
+      <div
+        className="locked-modal-card"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="locked-modal-title"
+      >
+        <button
+          type="button"
+          className="locked-modal-close"
+          onClick={onClose}
+          aria-label="Close modal"
+        >
+          <X size={16} />
+        </button>
+        <div className="locked-modal-icon" aria-hidden="true">
+          <LockKeyhole size={24} />
+        </div>
+        <span className="eyebrow">ACCOUNT REQUIRED</span>
+        <h2 id="locked-modal-title">Login to access {featureName}</h2>
+        <p>
+          Create an account or sign in to unlock {featureName} and securely save your progress.
+        </p>
+        <div className="locked-modal-actions">
+          <button
+            type="button"
+            className="button button-primary"
+            onClick={() => {
+              onClose()
+              router.push(`/login?mode=signin&next=${encodeURIComponent(targetRoute)}`)
+            }}
+          >
+            Sign In <ArrowRight size={15} />
+          </button>
+          <button
+            type="button"
+            className="button button-outline"
+            onClick={() => {
+              onClose()
+              router.push(`/login?mode=signup&next=${encodeURIComponent(targetRoute)}`)
+            }}
+          >
+            Create Account
+          </button>
+          <button
+            type="button"
+            className="button button-quiet"
+            onClick={onClose}
+          >
+            Maybe Later
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function RestrictedFeatureView({
+  featureName,
+  title,
+  subtitle,
+  active,
+}: {
+  featureName: string
+  title: string
+  subtitle: string
+  active: string
+}) {
+  const router = useRouter()
+  const { openLockedModal } = useContext(LockedModalContext)
+
+  useEffect(() => {
+    openLockedModal(featureName)
+  }, [featureName, openLockedModal])
+
+  return (
+    <DashboardShell title={title} subtitle={subtitle} active={active}>
+      <section className="restricted-view-card surface-card">
+        <div className="locked-modal-icon" aria-hidden="true">
+          <LockKeyhole size={26} />
+        </div>
+        <span className="eyebrow">GUEST SESSION</span>
+        <h2>Login to access {featureName}</h2>
+        <p>
+          Create an account or sign in to unlock {featureName} and securely save your progress. As a guest, you can still use MindBot Companion and Find a Therapist anytime.
+        </p>
+        <div className="restricted-view-actions">
+          <button
+            type="button"
+            className="button button-primary"
+            onClick={() => router.push(`/login?mode=signin&next=${encodeURIComponent(active)}`)}
+          >
+            Sign In <ArrowRight size={15} />
+          </button>
+          <button
+            type="button"
+            className="button button-outline"
+            onClick={() => router.push(`/login?mode=signup&next=${encodeURIComponent(active)}`)}
+          >
+            Create Account
+          </button>
+          <Link href="/dashboard/companion" className="button button-quiet">
+            Open Companion Chat
+          </Link>
+        </div>
+      </section>
+    </DashboardShell>
+  )
+}
+
 function ThemeToggle() {
   const [isDark, setIsDark] = useState(false)
 
@@ -769,18 +935,43 @@ function Landing() {
   )
 }
 
+function getSafeNextRoute(raw: string | null): string {
+  if (raw && raw.startsWith('/dashboard')) return raw
+  return '/dashboard'
+}
+
 function Login() {
-  const { user, signInGoogle, continueAnonymously } = useAuth()
+  const { user, signInGoogle, linkGoogleAccount, continueAnonymously } = useAuth()
   const router = useRouter()
   const [pending, setPending] = useState(false)
   const [error, setError] = useState('')
+  const [authMode, setAuthMode] = useState<string | null>(() =>
+    typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('mode') : null
+  )
+  const [nextRoute, setNextRoute] = useState<string>(() =>
+    typeof window !== 'undefined' ? getSafeNextRoute(new URLSearchParams(window.location.search).get('next')) : '/dashboard'
+  )
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search)
+      setAuthMode(params.get('mode'))
+      setNextRoute(getSafeNextRoute(params.get('next')))
+    }
+  }, [])
+
+  const isSignUpMode = authMode === 'signup'
+  const isUpgradingGuest = Boolean(user?.isAnonymous && (authMode === 'signin' || authMode === 'signup'))
 
   const authenticate = async (method: () => Promise<void>) => {
     setPending(true)
     setError('')
     try {
       await method()
-      router.replace('/dashboard')
+      const currentNext = typeof window !== 'undefined'
+        ? getSafeNextRoute(new URLSearchParams(window.location.search).get('next'))
+        : nextRoute
+      router.replace(currentNext)
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Sign-in could not be completed. Please try again.')
     } finally {
@@ -789,8 +980,20 @@ function Login() {
   }
 
   useEffect(() => {
-    if (user) router.replace('/dashboard')
-  }, [router, user])
+    if (!user) return
+    const currentParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null
+    const liveMode = currentParams?.get('mode') ?? authMode
+    const liveNext = getSafeNextRoute(currentParams?.get('next') ?? nextRoute)
+
+    if (!user.isAnonymous) {
+      router.replace(liveNext)
+      return
+    }
+    // Only redirect an anonymous user away from /login if they did NOT explicitly open Sign In or Create Account
+    if (liveMode !== 'signin' && liveMode !== 'signup') {
+      router.replace('/dashboard/companion')
+    }
+  }, [router, user, authMode, nextRoute])
 
   return (
     <main className="login-page">
@@ -804,25 +1007,59 @@ function Login() {
           <div className="mascot-halo" />
           <Logo variant="mascot" alt="SunnoBuddy mascot" />
         </div>
-        <span className="eyebrow">YOUR SPACE IS READY</span>
-        <h1>Welcome to your<br /><em>safe space.</em></h1>
-        <p>Come as you are. There’s no pressure to have the right words or know where to start.</p>
+        <span className="eyebrow">
+          {isSignUpMode
+            ? 'CREATE YOUR ACCOUNT'
+            : isUpgradingGuest
+            ? 'SIGN IN TO YOUR SPACE'
+            : 'YOUR SPACE IS READY'}
+        </span>
+        <h1>
+          {isSignUpMode ? (
+            <>Create your<br /><em>safe space.</em></>
+          ) : isUpgradingGuest ? (
+            <>Sign in to save<br /><em>your journey.</em></>
+          ) : (
+            <>Welcome to your<br /><em>safe space.</em></>
+          )}
+        </h1>
+        <p>
+          {isSignUpMode
+            ? 'Register with your Google account to unlock MindLog, Guided Reflection, Mood Insights, Reports, and Settings and keep your progress safe.'
+            : isUpgradingGuest
+            ? 'Sign in with your Google account to unlock MindLog, Guided Reflection, Mood Insights, Reports, and Settings while keeping your session.'
+            : 'Come as you are. There’s no pressure to have the right words or know where to start.'}
+        </p>
         <button
           type="button"
           disabled={pending}
-          onClick={() => void authenticate(signInGoogle)}
+          onClick={() => void authenticate(user?.isAnonymous ? linkGoogleAccount : signInGoogle)}
           className="button button-primary login-button"
         >
-          <span className="google-mark">G</span> {pending ? 'Signing you in…' : 'Continue with Google'} <ArrowRight size={16} />
+          <span className="google-mark">G</span>{' '}
+          {pending
+            ? isSignUpMode
+              ? 'Creating your account…'
+              : 'Signing you in…'
+            : isSignUpMode
+            ? 'Create account with Google'
+            : 'Continue with Google'}{' '}
+          <ArrowRight size={16} />
         </button>
-        <button
-          type="button"
-          disabled={pending}
-          onClick={() => void authenticate(continueAnonymously)}
-          className="button button-outline login-button"
-        >
-          <span className="guest-icon">G</span> {pending ? 'Entering safe space…' : 'Continue anonymously'}
-        </button>
+        {isUpgradingGuest ? (
+          <Link href="/dashboard/companion" className="button button-outline login-button">
+            Cancel &amp; return to guest dashboard
+          </Link>
+        ) : (
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() => void authenticate(continueAnonymously)}
+            className="button button-outline login-button"
+          >
+            <span className="guest-icon">G</span> {pending ? 'Entering safe space…' : 'Continue anonymously'}
+          </button>
+        )}
         {error && <p className="auth-error" role="alert">{error}</p>}
         <div className="login-privacy"><LockKeyhole size={13} /> Your thoughts are private, always.</div>
         <div className="login-disclaimer">SunnoBuddy supports your emotional wellbeing, but isn’t a substitute for professional mental healthcare.</div>
@@ -836,6 +1073,7 @@ function Sidebar({ active, close }: { active: string; close: () => void }) {
   const { user, logOut } = useAuth()
   const router = useRouter()
   const { lang, t } = useAppLanguage()
+  const { openLockedModal } = useContext(LockedModalContext)
   const [accountMenuOpen, setAccountMenuOpen] = useState(false)
   const [showSignOutConfirm, setShowSignOutConfirm] = useState(false)
   const [signingOut, setSigningOut] = useState(false)
@@ -893,13 +1131,34 @@ function Sidebar({ active, close }: { active: string; close: () => void }) {
         </div>
         <div className="side-label">YOUR SPACE</div>
         <nav className="side-nav">
-          {navItems.map(({ key, label, href, icon: Icon }) => (
-            <Link key={href} href={href} onClick={close} className={`side-link ${active === href ? 'active' : ''}`}>
-              <Icon size={18} />
-              <span>{t(key) || label}</span>
-              {active === href && <span className="active-mark" />}
-            </Link>
-          ))}
+          {navItems.map(({ key, label, href, icon: Icon }) => {
+            const lockedFeature = user?.isAnonymous ? RESTRICTED_FEATURES[href] : undefined
+            if (lockedFeature) {
+              return (
+                <button
+                  key={href}
+                  type="button"
+                  onClick={() => {
+                    close()
+                    openLockedModal(lockedFeature)
+                  }}
+                  className={`side-link is-locked ${active === href ? 'active' : ''}`}
+                  title={`Sign in to access ${lockedFeature}`}
+                >
+                  <Icon size={18} />
+                  <span>{t(key) || label}</span>
+                  <LockKeyhole size={13} className="nav-lock-icon" aria-label="Locked for guest users" />
+                </button>
+              )
+            }
+            return (
+              <Link key={href} href={href} onClick={close} className={`side-link ${active === href ? 'active' : ''}`}>
+                <Icon size={18} />
+                <span>{t(key) || label}</span>
+                {active === href && <span className="active-mark" />}
+              </Link>
+            )
+          })}
         </nav>
         <div className="sidebar-bottom">
           <div className="sidebar-note">
@@ -925,14 +1184,30 @@ function Sidebar({ active, close }: { active: string; close: () => void }) {
 
                 <div className="account-popover-divider" />
 
-                <Link
-                  href="/dashboard/settings"
-                  className="account-popover-item"
-                  onClick={() => { setAccountMenuOpen(false); close(); }}
-                >
-                  <Settings size={16} />
-                  <span>{t('nav_settings')}</span>
-                </Link>
+                {user?.isAnonymous ? (
+                  <button
+                    type="button"
+                    className="account-popover-item is-locked"
+                    onClick={() => {
+                      setAccountMenuOpen(false)
+                      close()
+                      openLockedModal('Settings')
+                    }}
+                  >
+                    <Settings size={16} />
+                    <span>{t('nav_settings')}</span>
+                    <LockKeyhole size={13} className="nav-lock-icon" aria-label="Locked for guest users" />
+                  </button>
+                ) : (
+                  <Link
+                    href="/dashboard/settings"
+                    className="account-popover-item"
+                    onClick={() => { setAccountMenuOpen(false); close(); }}
+                  >
+                    <Settings size={16} />
+                    <span>{t('nav_settings')}</span>
+                  </Link>
+                )}
 
                 {!showSignOutConfirm ? (
                   <button
@@ -1012,6 +1287,7 @@ function DashboardShell({
   const { user, logOut } = useAuth()
   const router = useRouter()
   const { t } = useAppLanguage()
+  const { openLockedModal } = useContext(LockedModalContext)
   const accountName = user?.isAnonymous ? t('nav_status') : user?.displayName || user?.email || t('nav_account')
 
   const handleSignOut = async () => {
@@ -1071,14 +1347,29 @@ function DashboardShell({
                     {user?.isAnonymous ? 'Guest session' : 'Google account'}
                   </span>
                 </div>
-                <Link
-                  href="/dashboard/settings"
-                  onClick={() => setDropdownOpen(false)}
-                  style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', padding: '6px 4px', color: 'inherit', textDecoration: 'none' }}
-                >
-                  <Settings size={14} />
-                  <span>{t('nav_settings')}</span>
-                </Link>
+                {user?.isAnonymous ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDropdownOpen(false)
+                      openLockedModal('Settings')
+                    }}
+                    style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', padding: '6px 4px', color: 'inherit', background: 'none', border: 'none', cursor: 'pointer', width: '100%', textAlign: 'left', opacity: 0.78 }}
+                  >
+                    <Settings size={14} />
+                    <span>{t('nav_settings')}</span>
+                    <LockKeyhole size={12} style={{ marginLeft: 'auto', opacity: 0.7 }} />
+                  </button>
+                ) : (
+                  <Link
+                    href="/dashboard/settings"
+                    onClick={() => setDropdownOpen(false)}
+                    style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', padding: '6px 4px', color: 'inherit', textDecoration: 'none' }}
+                  >
+                    <Settings size={14} />
+                    <span>{t('nav_settings')}</span>
+                  </Link>
+                )}
                 <button
                   type="button"
                   onClick={() => void handleSignOut()}
@@ -1130,14 +1421,42 @@ function DashboardShell({
             <MessageCircle size={18} />
             <span>{t('nav_companion')}</span>
           </Link>
-          <Link href="/dashboard/intake" className={`mobile-bottom-nav-item ${active === '/dashboard/intake' ? 'is-active' : ''}`}>
-            <Sparkles size={18} />
-            <span>Reflect</span>
-          </Link>
-          <Link href="/dashboard/mindlog" className={`mobile-bottom-nav-item ${active === '/dashboard/mindlog' ? 'is-active' : ''}`}>
-            <BookHeart size={18} />
-            <span>{t('nav_mindlog')}</span>
-          </Link>
+          {user?.isAnonymous ? (
+            <button
+              type="button"
+              onClick={() => openLockedModal('Guided Reflection')}
+              className={`mobile-bottom-nav-item is-locked ${active === '/dashboard/intake' ? 'is-active' : ''}`}
+            >
+              <span className="mobile-nav-icon-wrap">
+                <Sparkles size={18} />
+                <LockKeyhole size={10} className="mobile-nav-lock" />
+              </span>
+              <span>Reflect</span>
+            </button>
+          ) : (
+            <Link href="/dashboard/intake" className={`mobile-bottom-nav-item ${active === '/dashboard/intake' ? 'is-active' : ''}`}>
+              <Sparkles size={18} />
+              <span>Reflect</span>
+            </Link>
+          )}
+          {user?.isAnonymous ? (
+            <button
+              type="button"
+              onClick={() => openLockedModal('MindLog')}
+              className={`mobile-bottom-nav-item is-locked ${active === '/dashboard/mindlog' ? 'is-active' : ''}`}
+            >
+              <span className="mobile-nav-icon-wrap">
+                <BookHeart size={18} />
+                <LockKeyhole size={10} className="mobile-nav-lock" />
+              </span>
+              <span>{t('nav_mindlog')}</span>
+            </button>
+          ) : (
+            <Link href="/dashboard/mindlog" className={`mobile-bottom-nav-item ${active === '/dashboard/mindlog' ? 'is-active' : ''}`}>
+              <BookHeart size={18} />
+              <span>{t('nav_mindlog')}</span>
+            </Link>
+          )}
           <Link href="/dashboard/therapists" className={`mobile-bottom-nav-item ${active === '/dashboard/therapists' ? 'is-active' : ''}`}>
             <MapPin size={18} />
             <span>Find Care</span>
@@ -1365,7 +1684,9 @@ function MindfulBreathWidget() {
 function DashboardHome() {
   const { user } = useAuth()
   const { lang, t } = useAppLanguage()
-  const name = user?.isAnonymous ? t('nav_status') : user?.displayName?.split(' ')[0] || 'friend'
+  const { openLockedModal } = useContext(LockedModalContext)
+  const isGuest = Boolean(user?.isAnonymous)
+  const name = isGuest ? t('nav_status') : user?.displayName?.split(' ')[0] || 'friend'
   const [recentEntries, setRecentEntries] = useState<MindLogEntry[]>([])
   const [entryCount, setEntryCount] = useState(0)
   const [latestEmotion, setLatestEmotion] = useState<EmotionAnalysis | null>(null)
@@ -1403,6 +1724,10 @@ function DashboardHome() {
   }
 
   useEffect(() => {
+    if (isGuest) {
+      setDashboardLoading(false)
+      return
+    }
     let active = true
     services.getIntakeStatus()
       .then((st) => {
@@ -1525,20 +1850,50 @@ function DashboardHome() {
           <p>{t('dash_card_buddy_desc')}</p>
           <span className="quick-tag">COMPANION</span>
         </Link>
-        <Link href="/dashboard/mindlog" className="quick-card quick-peach">
-          <span className="quick-icon"><BookHeart size={20} /></span>
-          <span className="quick-arrow"><ArrowRight size={17} /></span>
-          <h3>{t('dash_card_mindlog_title')}</h3>
-          <p>{t('dash_card_mindlog_desc')}</p>
-          <span className="quick-tag">MINDLOG</span>
-        </Link>
-        <Link href="/dashboard/intake" className="quick-card quick-lilac">
-          <span className="quick-icon"><Sparkles size={20} /></span>
-          <span className="quick-arrow"><ArrowRight size={17} /></span>
-          <h3>{t('dash_card_guided_title')}</h3>
-          <p>{t('dash_card_guided_desc')}</p>
-          <span className="quick-tag">REFLECTION</span>
-        </Link>
+        {isGuest ? (
+          <button
+            type="button"
+            onClick={() => openLockedModal('MindLog')}
+            className="quick-card quick-peach is-locked-card"
+            style={{ textAlign: 'left', cursor: 'pointer' }}
+          >
+            <span className="quick-icon"><BookHeart size={20} /></span>
+            <span className="quick-arrow" title="Sign in required"><LockKeyhole size={16} /></span>
+            <h3>{t('dash_card_mindlog_title')}</h3>
+            <p>{t('dash_card_mindlog_desc')}</p>
+            <span className="quick-tag">MINDLOG · SIGN IN</span>
+          </button>
+        ) : (
+          <Link href="/dashboard/mindlog" className="quick-card quick-peach">
+            <span className="quick-icon"><BookHeart size={20} /></span>
+            <span className="quick-arrow"><ArrowRight size={17} /></span>
+            <h3>{t('dash_card_mindlog_title')}</h3>
+            <p>{t('dash_card_mindlog_desc')}</p>
+            <span className="quick-tag">MINDLOG</span>
+          </Link>
+        )}
+        {isGuest ? (
+          <button
+            type="button"
+            onClick={() => openLockedModal('Guided Reflection')}
+            className="quick-card quick-lilac is-locked-card"
+            style={{ textAlign: 'left', cursor: 'pointer' }}
+          >
+            <span className="quick-icon"><Sparkles size={20} /></span>
+            <span className="quick-arrow" title="Sign in required"><LockKeyhole size={16} /></span>
+            <h3>{t('dash_card_guided_title')}</h3>
+            <p>{t('dash_card_guided_desc')}</p>
+            <span className="quick-tag">REFLECTION · SIGN IN</span>
+          </button>
+        ) : (
+          <Link href="/dashboard/intake" className="quick-card quick-lilac">
+            <span className="quick-icon"><Sparkles size={20} /></span>
+            <span className="quick-arrow"><ArrowRight size={17} /></span>
+            <h3>{t('dash_card_guided_title')}</h3>
+            <p>{t('dash_card_guided_desc')}</p>
+            <span className="quick-tag">REFLECTION</span>
+          </Link>
+        )}
         <Link href="/dashboard/therapists" className="quick-card quick-teal">
           <span className="quick-icon"><MapPin size={20} /></span>
           <span className="quick-arrow"><ArrowRight size={17} /></span>
@@ -1557,7 +1912,16 @@ function DashboardHome() {
             </div>
             <span className="soft-pill"><Activity size={13} /> MindLog</span>
           </div>
-          {dashboardLoading ? (
+          {isGuest ? (
+            <div className="empty-mood">
+              <div className="mood-illustration"><LockKeyhole size={24} /><span>✳</span></div>
+              <b>Sign in to unlock Mood Insights</b>
+              <p>Create an account or sign in to save MindLog entries and view your personal mood patterns.</p>
+              <button type="button" className="button button-quiet" style={{ padding: 0, minHeight: 'auto' }} onClick={() => openLockedModal('Mood Insights')}>
+                Unlock Mood Insights <ArrowRight size={14} />
+              </button>
+            </div>
+          ) : dashboardLoading ? (
             <p role="status">Loading your MindLog summary…</p>
           ) : recentEntries.length ? (
             <div className="empty-mood">
@@ -1584,7 +1948,15 @@ function DashboardHome() {
             </div>
             <Clock3 size={17} className="muted-icon" />
           </div>
-          {dashboardLoading ? (
+          {isGuest ? (
+            <div className="activity-empty">
+              <span className="activity-mark"><LockKeyhole size={19} /></span>
+              <div>
+                <b>Private journal &amp; reports require an account</b>
+                <p>As a guest, your Companion chat and Find a Therapist tools are ready whenever you need support.</p>
+              </div>
+            </div>
+          ) : dashboardLoading ? (
             <p role="status">Loading your recent activity…</p>
           ) : recentEntries.length ? (
             <div className="dashboard-recent">
@@ -1611,13 +1983,26 @@ function DashboardHome() {
           <div className="intake-progress">
             <span>Guided reflection</span>
             <span>
-              {intakeStatus?.can_compare
+              {isGuest
+                ? 'Sign in required'
+                : intakeStatus?.can_compare
                 ? `${intakeStatus.total_assessments ?? 2} check-ins saved`
                 : intakeDone
                 ? 'Completed'
                 : 'Open to view progress'}
             </span>
-            <Link href="/dashboard/intake">{intakeDone ? 'View reflection & growth' : 'Continue reflection'}</Link>
+            {isGuest ? (
+              <button
+                type="button"
+                className="button button-quiet"
+                style={{ padding: 0, minHeight: 'auto', fontSize: 'inherit', fontWeight: 600 }}
+                onClick={() => openLockedModal('Guided Reflection')}
+              >
+                Unlock reflection
+              </button>
+            ) : (
+              <Link href="/dashboard/intake">{intakeDone ? 'View reflection & growth' : 'Continue reflection'}</Link>
+            )}
           </div>
         </article>
       </section>
@@ -1638,7 +2023,11 @@ function Companion() {
   const [loadingHistory, setLoadingHistory] = useState(false)
   const [showSessionsDrawer, setShowSessionsDrawer] = useState(false)
   const [apiError, setApiError] = useState('')
-  const [crisisNotice, setCrisisNotice] = useState<{ detected: boolean; helplines: Array<{ name: string; phone: string; url?: string }> } | null>(null)
+  const [crisisNotice, setCrisisNotice] = useState<{
+    detected: boolean
+    mode?: 'none' | 'personal' | 'third_party'
+    helplines: Array<{ name: string; phone?: string; number?: string; hours?: string; url?: string }>
+  } | null>(null)
   const [recording, setRecording] = useState(false)
   const [recordSeconds, setRecordSeconds] = useState(0)
   const timerRef = useRef<number | null>(null)
@@ -1781,7 +2170,10 @@ function Companion() {
   }
 
   useEffect(() => {
-    threadEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
+    const id = window.requestAnimationFrame(() => {
+      threadEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
+    })
+    return () => window.cancelAnimationFrame(id)
   }, [messages, sending, apiError, crisisNotice, recording])
 
   useEffect(() => {
@@ -1807,8 +2199,12 @@ function Companion() {
       if (typeof window !== 'undefined') {
         localStorage.setItem('sunnobuddy_active_session_id', result.session_id)
       }
-      setCrisisNotice({ detected: Boolean(result.crisis_detected), helplines: result.helplines ?? [] })
-      if (!result.crisis_detected) setMessages((old) => [...old, { who: 'buddy', text: result.reply }])
+      setCrisisNotice({
+        detected: Boolean(result.crisis_detected),
+        mode: result.crisis_mode ?? (result.crisis_detected ? 'personal' : 'none'),
+        helplines: result.helplines ?? [],
+      })
+      if (result.reply) setMessages((old) => [...old, { who: 'buddy', text: result.reply }])
       void refreshSessionsList()
     } catch (cause) {
       setRetryMessage(message)
@@ -2112,20 +2508,38 @@ function Companion() {
             )}
 
             {crisisNotice?.detected && (
-              <div className="crisis-panel-container" role="alert" aria-live="assertive">
+              <div
+                className={`crisis-panel-container ${crisisNotice.mode === 'third_party' ? 'is-third-party' : ''}`}
+                role="alert"
+                aria-live="assertive"
+              >
                 <div className="crisis-panel-header">
                   <ShieldCheck size={20} />
-                  <h3>You deserve immediate care and gentle support</h3>
+                  <h3>
+                    {crisisNotice.mode === 'third_party'
+                      ? 'Support resources you can share with your friend'
+                      : 'You deserve immediate care and gentle support'}
+                  </h3>
                 </div>
                 <p className="crisis-panel-intro">
-                  Things feel intensely heavy right now, and you do not have to carry this alone. SunnoBuddy is an AI companion and cannot replace human emergency support. If you or someone you know may be in immediate danger, please connect with someone you trust or reach out to these free, confidential, 24/7 helplines right now.
+                  {crisisNotice.mode === 'third_party'
+                    ? 'If your friend or loved one may be in immediate danger, these verified 24/7 helplines and emergency services are resources you can share with them or contact to get them immediate help.'
+                    : 'Things feel intensely heavy right now, and you do not have to carry this alone. SunnoBuddy is an AI companion and cannot replace human emergency support. If you or someone you know may be in immediate danger, please connect with someone you trust or reach out to these free, confidential, 24/7 helplines right now.'}
                 </p>
 
                 <div className="crisis-immediate-alert">
                   <Phone size={15} style={{ flexShrink: 0, marginTop: '2px' }} />
                   <div>
-                    <b>Immediate danger or self-harm emergency?</b>
-                    <span> Call <b>112</b> (All-India Emergency) immediately, or sit with a family member or friend you trust.</span>
+                    <b>
+                      {crisisNotice.mode === 'third_party'
+                        ? 'Is your friend in immediate physical danger?'
+                        : 'Immediate danger or self-harm emergency?'}
+                    </b>
+                    <span>
+                      {crisisNotice.mode === 'third_party'
+                        ? <> Try not to leave them alone if it is safe, involve a trusted family member, and call <b>112</b> (All-India Emergency) for them.</>
+                        : <> Call <b>112</b> (All-India Emergency) immediately, or sit with a family member or friend you trust.</>}
+                    </span>
                   </div>
                 </div>
 
@@ -2139,16 +2553,23 @@ function Companion() {
                         { name: 'Emergency Services', number: '112', hours: 'Immediate 24/7 Police, Ambulance, Fire', url: 'https://112.gov.in' },
                       ]
                   ).map((line: any) => {
-                    const cleanPhone = (line.phone || line.number || '').replace(/[^\d+]/g, '')
+                    const displayPhone = line.number || line.phone || ''
+                    const cleanPhone = displayPhone.replace(/[^\d+]/g, '')
                     return (
                       <div className="crisis-card-item" key={line.name}>
-                        <div>
-                          <span className="crisis-card-title">{line.name}</span>
-                          <span className="crisis-card-desc">{line.hours || line.desc || 'Free & confidential crisis care'}</span>
+                        <div className="crisis-card-info">
+                          <span className="crisis-card-title">
+                            {line.name}{displayPhone ? ` – ${displayPhone}` : ''}
+                          </span>
+                          <span className="crisis-card-desc">
+                            {line.hours || line.desc || '24/7 Free & confidential crisis care'}
+                          </span>
                         </div>
-                        <a href={`tel:${cleanPhone}`} className="crisis-call-btn">
-                          <Phone size={13} /> Call {line.number || line.phone}
-                        </a>
+                        {cleanPhone && (
+                          <a href={`tel:${cleanPhone}`} className="crisis-call-btn">
+                            <Phone size={14} /> Call {displayPhone}
+                          </a>
+                        )}
                       </div>
                     )
                   })}
@@ -2158,9 +2579,11 @@ function Companion() {
                   <button
                     type="button"
                     className="crisis-continue-btn"
-                    onClick={() => setCrisisNotice({ detected: false, helplines: [] })}
+                    onClick={() => setCrisisNotice({ detected: false, mode: 'none', helplines: [] })}
                   >
-                    I am safe right now · Continue companion conversation
+                    {crisisNotice.mode === 'third_party'
+                      ? 'Hide resources · Continue conversation'
+                      : 'I am safe right now · Continue companion conversation'}
                   </button>
                 </div>
               </div>
@@ -4527,17 +4950,85 @@ function SettingsPage() {
 
 export default function SunnoBuddyApp() {
   const pathname = usePathname()
+  const { user } = useAuth()
+  const [lockedFeature, setLockedFeature] = useState<string | null>(null)
+
   if (pathname === '/login') return <Login />
   if (pathname === '/' || !pathname.startsWith('/dashboard')) return <Landing />
+
+  const isGuest = Boolean(user?.isAnonymous)
   let page: React.ReactNode = <DashboardHome />
-  if (pathname === '/dashboard/companion') page = <Companion />
-  else if (pathname === '/dashboard/intake') page = <Intake />
-  else if (pathname === '/dashboard/mindlog/calendar') page = <MindLog />
-  else if (pathname.startsWith('/dashboard/mindlog/')) page = <MindLog />
-  else if (pathname === '/dashboard/mindlog') page = <MindLog />
-  else if (pathname === '/dashboard/insights') page = <Insights />
-  else if (pathname === '/dashboard/reports') page = <Reports />
-  else if (pathname === '/dashboard/settings') page = <SettingsPage />
-  else if (pathname === '/dashboard/therapists') page = <TherapistLocator />
-  return <ProtectedRoute>{page}</ProtectedRoute>
+
+  if (pathname === '/dashboard/companion') {
+    page = <Companion />
+  } else if (pathname === '/dashboard/therapists') {
+    page = <TherapistLocator />
+  } else if (pathname === '/dashboard/intake') {
+    page = isGuest ? (
+      <RestrictedFeatureView
+        featureName="Guided Reflection"
+        title="Guided reflection"
+        subtitle="A few thoughtful questions, at your own pace."
+        active="/dashboard/intake"
+      />
+    ) : (
+      <Intake />
+    )
+  } else if (pathname === '/dashboard/mindlog/calendar' || pathname.startsWith('/dashboard/mindlog/') || pathname === '/dashboard/mindlog') {
+    page = isGuest ? (
+      <RestrictedFeatureView
+        featureName="MindLog"
+        title="MindLog"
+        subtitle="Your private emotional journal."
+        active="/dashboard/mindlog"
+      />
+    ) : (
+      <MindLog />
+    )
+  } else if (pathname === '/dashboard/insights') {
+    page = isGuest ? (
+      <RestrictedFeatureView
+        featureName="Mood Insights"
+        title="Mood Insights"
+        subtitle="Gentle patterns from your reflections."
+        active="/dashboard/insights"
+      />
+    ) : (
+      <Insights />
+    )
+  } else if (pathname === '/dashboard/reports') {
+    page = isGuest ? (
+      <RestrictedFeatureView
+        featureName="Reports"
+        title="Reports"
+        subtitle="Exportable personal wellness summaries."
+        active="/dashboard/reports"
+      />
+    ) : (
+      <Reports />
+    )
+  } else if (pathname === '/dashboard/settings') {
+    page = isGuest ? (
+      <RestrictedFeatureView
+        featureName="Settings"
+        title="Settings"
+        subtitle="Account, language, and preferences."
+        active="/dashboard/settings"
+      />
+    ) : (
+      <SettingsPage />
+    )
+  }
+
+  return (
+    <LockedModalContext.Provider value={{ openLockedModal: setLockedFeature }}>
+      <ProtectedRoute>{page}</ProtectedRoute>
+      {lockedFeature && (
+        <LockedFeatureModal
+          featureName={lockedFeature}
+          onClose={() => setLockedFeature(null)}
+        />
+      )}
+    </LockedModalContext.Provider>
+  )
 }

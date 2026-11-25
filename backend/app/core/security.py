@@ -40,3 +40,13 @@ def get_current_user(creds: HTTPAuthorizationCredentials = Depends(bearer)):
         "display_name": decoded.get("name", "User"),
         "is_anonymous": decoded.get("firebase", {}).get("sign_in_provider") == "anonymous" or decoded.get("is_anonymous", False),
     }
+
+
+def require_authenticated_user(user=Depends(get_current_user)):
+    """Block anonymous/guest users from account-restricted endpoints."""
+    if user.get("is_anonymous"):
+        raise HTTPException(
+            status_code=403,
+            detail="Please sign in or create an account to access this feature.",
+        )
+    return user

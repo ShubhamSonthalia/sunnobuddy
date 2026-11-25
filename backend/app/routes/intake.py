@@ -1,6 +1,6 @@
 from typing import Optional
 from fastapi import APIRouter, Depends, Query
-from app.core.security import get_current_user
+from app.core.security import require_authenticated_user as get_current_user
 from app.models.intake import AnswerRequest
 from app.services import intake_service as svc
 from app.utils.response_utils import ok

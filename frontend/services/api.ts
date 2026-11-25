@@ -240,7 +240,9 @@ export const services = {
       reply: string
       session_id: string
       crisis_detected?: boolean
-      helplines?: Array<{ name: string; phone: string; url?: string }>
+      crisis_mode?: 'none' | 'personal' | 'third_party'
+      response_type?: string
+      helplines?: Array<{ name: string; phone?: string; number?: string; hours?: string; url?: string }>
       safety_message?: string | null
     }>('/api/chat', {
       method: 'POST',

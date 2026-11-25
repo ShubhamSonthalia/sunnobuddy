@@ -111,7 +111,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         try {
           await signInWithPopup(auth, new GoogleAuthProvider())
           return
-        } catch (cause) {
+        } catch (cause: any) {
+          if (cause?.code === 'auth/popup-closed-by-user' || cause?.code === 'auth/cancelled-popup-request') {
+            throw new Error('Sign-in was cancelled. You can try again whenever you are ready.')
+          }
           console.warn('Firebase Google sign-in failed, continuing with demo Google account:', cause)
         }
       }
@@ -160,14 +163,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         try {
           await linkWithPopup(auth.currentUser, new GoogleAuthProvider())
           return
-        } catch (cause) {
+        } catch (cause: any) {
+          if (cause?.code === 'auth/popup-closed-by-user' || cause?.code === 'auth/cancelled-popup-request') {
+            throw new Error('Sign-in was cancelled. You can try again or return to guest mode.')
+          }
+          if (cause?.code === 'auth/credential-already-in-use') {
+            await signInWithPopup(auth, new GoogleAuthProvider())
+            return
+          }
           console.warn('Firebase account linking failed, falling back to simulated connection:', cause)
         }
       } else if (auth) {
         try {
           await signInWithPopup(auth, new GoogleAuthProvider())
           return
-        } catch (cause) {
+        } catch (cause: any) {
+          if (cause?.code === 'auth/popup-closed-by-user' || cause?.code === 'auth/cancelled-popup-request') {
+            throw new Error('Sign-in was cancelled. You can try again or return to guest mode.')
+          }
           console.warn('Firebase Google sign-in failed, falling back to simulated connection:', cause)
         }
       }

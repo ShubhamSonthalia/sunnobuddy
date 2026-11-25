@@ -153,24 +153,106 @@ def run_tests():
     # TEST 7: Context-Aware Crisis Detection & Verified India Helplines
     # -------------------------------------------------------------------------
     print("\n[TEST 7] Testing Context-Aware Crisis Support & India Helplines...")
-    from app.services.crisis_service import detect_crisis, crisis_reply, HELPLINES
+    from app.services.crisis_service import detect_crisis, classify_risk, crisis_reply, third_party_fallback_reply, clarify_reply, HELPLINES
 
-    # 1. Acute first-person distress must trigger crisis
+    # Original Bug Case 1 & Case 2
+    case1 = classify_risk("I haven't got any placement yet, I feel worthless and I want to kill myself.")
+    assert case1["personal_crisis"] is True and case1["person_at_risk"] == "user"
+    assert case1["response_type"] == "personal_crisis_support" and case1["show_crisis_ui"] is True
+
+    case2 = classify_risk(
+        "My friend just had a bad breakup and is now thinking this is the end of the world and wants to commit suicide. I feel so bad and lost that I can't help him with this."
+    )
+    assert case2["personal_crisis"] is False, "Third-party friend concern must NOT classify user as suicidal"
+    assert case2["person_at_risk"] == "friend"
+    assert case2["response_type"] == "support_user_helping_third_party"
+    assert case2["show_crisis_ui"] is False
+
+    # Personal-risk cases (1-6)
+    personal_cases = [
+        "I want to kill myself.",
+        "I feel worthless and want to end my life.",
+        "I don't want to wake up tomorrow.",
+        "I might hurt myself tonight.",
+        "Mera mann kar raha hai sab khatam kar du.",
+        "Placement nahi laga, mujhe lagta hai meri life ka koi matlab nahi.",
+        "Mujhe lagta hai mere jeene ke koi matlab nahi hai",
+    ]
+    for msg in personal_cases:
+        res = classify_risk(msg)
+        assert res["personal_crisis"] is True, f"Expected personal_crisis=True for: {msg}, got {res}"
+        assert res["person_at_risk"] == "user", f"Expected person_at_risk='user' for: {msg}"
+        assert res["show_crisis_ui"] is True
+
+    # Backward-compatible detect_crisis check across English, Hinglish, Hindi
     c1, l1 = detect_crisis("I want to end my life, everything is too painful.")
-    assert c1 is True and l1 == "en", f"Expected crisis detection, got {c1}, {l1}"
-
+    assert c1 is True and l1 == "en"
     c2, l2 = detect_crisis("Mujhe jeena nahi hai, main khud ko khatam kar dunga")
-    assert c2 is True and l2 == "hinglish", f"Expected hinglish crisis detection, got {c2}, {l2}"
-
+    assert c2 is True and l2 == "hinglish"
     c3, l3 = detect_crisis("मुझे जीने का मन नहीं है, मैं आत्महत्या करने की सोच रहा हूँ")
-    assert c3 is True and l3 == "hi", f"Expected hindi crisis detection, got {c3}, {l3}"
+    assert c3 is True and l3 == "hi"
 
-    # 2. Purely educational inquiries must NOT trigger false positive
-    e1, _ = detect_crisis("What is the history of suicide prevention day?")
-    assert e1 is False, "Educational query should NOT trigger crisis alarm"
+    # Third-party cases (7-12)
+    third_party_cases = [
+        ("My friend wants to kill himself.", "friend"),
+        ("My sister says she doesn't want to live anymore.", "family_member"),
+        ("My friend had a breakup and is thinking about suicide. How can I help?", "friend"),
+        ("I am scared my friend might hurt himself.", "friend"),
+        ("Mera dost suicide karne ki baat kar raha hai, main kya karu?", "friend"),
+        ("My roommate says everyone would be better off without him.", "friend"),
+    ]
+    for msg, expected_person in third_party_cases:
+        res = classify_risk(msg)
+        assert res["personal_crisis"] is False, f"Third-party case must NOT trigger personal_crisis: {msg}"
+        assert res["person_at_risk"] == expected_person, f"Expected {expected_person} for {msg}, got {res['person_at_risk']}"
+        assert res["response_type"] == "support_user_helping_third_party", f"Wrong response_type for: {msg}"
 
-    e2, _ = detect_crisis("Statistics on suicide rates in college research paper")
-    assert e2 is False, "Academic query should NOT trigger crisis alarm"
+    # Non-crisis / educational / fictional cases (13-16)
+    non_crisis_cases = [
+        "Explain suicide prevention strategies.",
+        "I am researching suicide statistics.",
+        "My character in a novel is suicidal.",
+        "What are warning signs of suicidal behavior?",
+        "What is the history of suicide prevention day?",
+    ]
+    for msg in non_crisis_cases:
+        res = classify_risk(msg)
+        assert res["risk_detected"] is False and res["personal_crisis"] is False, f"Non-crisis falsely flagged: {msg}"
+        assert res["show_crisis_ui"] is False
+
+    # Ambiguous cases (17-19) without prior risk history
+    ambiguous_cases = [
+        "I can't do this anymore.",
+        "I want everything to end.",
+        "I don't want to be here anymore.",
+    ]
+    for msg in ambiguous_cases:
+        res = classify_risk(msg)
+        assert res["intent"] == "AMBIGUOUS_RISK", f"Expected AMBIGUOUS_RISK for: {msg}, got {res}"
+        assert res["response_type"] == "clarify_ambiguous_risk"
+        assert res["show_crisis_ui"] is False
+
+    # Multi-turn conversation context tests
+    friend_history = [
+        {"role": "user", "content": "My friend is depressed."},
+        {"role": "assistant", "content": "I'm sorry your friend is going through that."},
+    ]
+    follow1 = classify_risk("He says he wants to end everything.", history=friend_history)
+    assert follow1["personal_crisis"] is False and follow1["person_at_risk"] == "friend"
+    follow2 = classify_risk("I don't know what to do.", history=friend_history + [{"role": "user", "content": "He says he wants to end everything."}])
+    assert follow2["personal_crisis"] is False and follow2["response_type"] == "support_user_helping_third_party"
+
+    personal_history = [
+        {"role": "user", "content": "I am struggling badly."},
+        {"role": "user", "content": "I feel worthless."},
+    ]
+    p_follow = classify_risk("I think I might end my life.", history=personal_history)
+    assert p_follow["personal_crisis"] is True and p_follow["person_at_risk"] == "user"
+
+    # Response generators check
+    assert len(crisis_reply("hinglish")) > 20
+    assert "14416" in third_party_fallback_reply("en")
+    assert len(clarify_reply("en")) > 20
 
     # 3. Verified India helplines check
     telemanas = next((h for h in HELPLINES if "14416" in h["number"]), None)

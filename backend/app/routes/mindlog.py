@@ -1,7 +1,7 @@
 from datetime import date
 from typing import Optional
 from fastapi import APIRouter, Depends, BackgroundTasks
-from app.core.security import get_current_user
+from app.core.security import require_authenticated_user as get_current_user
 from app.models.mindlog import MindLogCreate, MindLogUpdate
 from app.services import mindlog_service as svc
 from app.services import emotion_service
